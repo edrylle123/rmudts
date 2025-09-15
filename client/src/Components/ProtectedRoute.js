@@ -1,22 +1,2 @@
-// src/ProtectedRoute.js
-import React from "react";
-import { Navigate } from "react-router-dom";
-
-export default function ProtectedRoute({ user, allowedRoles, children }) {
-  if (!user) {
-    // not logged in → back to login
-    return <Navigate to="/" replace />;
-  }
-
-  if (!allowedRoles.includes(user.role)) {
-    // logged in but role not allowed → redirect based on role
-    return user.role === "admin" ? (
-      <Navigate to="/dashboard" replace />
-    ) : (
-        <Navigate to="/user-dashboard" replace />
-      );
-  }
-
-  // allowed → show the page
-  return children;
-}
+import React from 'react'; import { Navigate } from 'react-router-dom'; import { useAuth } from '../AuthContext'; export default function ProtectedRoute({ children, allowedRoles }) { const { user, loading } = useAuth(); if (loading) { return <div>Loading...</div>; // Or your loading component 
+} if (!user) { return <Navigate to="/" replace />; } if (allowedRoles && !allowedRoles.includes(user.role)) { return <Navigate to="/" replace />; } return children; }

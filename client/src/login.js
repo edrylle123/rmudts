@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const [values, setValues] = useState({ email: "", password: "" });
-  const [errors, setErrors] = useState({});
+  const [errors] = useState({});
   const navigate = useNavigate();
 
   const handleInput = (e) => {
@@ -25,11 +25,11 @@ export default function Login() {
         localStorage.setItem("user", JSON.stringify(res.data.user));
 
         // Redirect based on role
-        if (res.data.user.role === "admin") {
-          navigate("/dashboard");
-        } else {
-          navigate("/user-dashboard");
-        }
+ if (res.data.user.role === "admin") {
+  navigate("/dashboard", { replace: true });
+} else {
+  navigate("/user-dashboard", { replace: true });
+}
       } else {
         alert(res.data.message);
       }

@@ -370,8 +370,29 @@ app.get("/records/my-office", verifyToken, (req, res) => {
     res.json(rows);
   });
 });
-// Fetch records for a specific office
-
+// Backend route (Express.js example)
+app.post('/refresh-token', (req, res) => {
+    const { refreshToken } = req.body;
+    
+    // Verify refresh token
+    jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).json({ error: 'Invalid refresh token' });
+        }
+        
+        // Generate new access token
+        const newToken = jwt.sign(
+            { id: decoded.id, email: decoded.email, role: decoded.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '15m' } // Short-lived access token
+        );
+        
+        res.json({ 
+            token: newToken,
+            user: { id: decoded.id, email: decoded.email, role: decoded.role }
+        });
+    });
+});
 
 
 // ====== Start server ======

@@ -1,12 +1,14 @@
-// src/Components/UserDashboard.js
+// Components/UserDashboard.js
 import React, { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import axios from "axios";
+import { useAuth } from "../AuthContext";
 
-export default function UserDashboard({ user }) {
+export default function UserDashboard() {
+  const { user } = useAuth(); // Get user from context
   const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true); // ✅ Added this line
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -26,6 +28,9 @@ export default function UserDashboard({ user }) {
       });
   }, []);
 
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="app-layout">
@@ -39,27 +44,27 @@ export default function UserDashboard({ user }) {
         {records.length === 0 ? (
           <p>No records found for your office.</p>
         ) : (
-            <table className="min-w-full border border-gray-300">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border px-4 py-2">Control #</th>
-                  <th className="border px-4 py-2">Title</th>
-                  <th className="border px-4 py-2">Classification</th>
-                  <th className="border px-4 py-2">Priority</th>
+          <table className="min-w-full border border-gray-300">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border px-4 py-2">Control #</th>
+                <th className="border px-4 py-2">Title</th>
+                <th className="border px-4 py-2">Classification</th>
+                <th className="border px-4 py-2">Priority</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((rec) => (
+                <tr key={rec.id}>
+                  <td className="border px-4 py-2">{rec.controlnum}</td>
+                  <td className="border px-4 py-2">{rec.title}</td>
+                  <td className="border px-4 py-2">{rec.classification}</td>
+                  <td className="border px-4 py-2">{rec.priority}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {records.map((rec) => (
-                  <tr key={rec.id}>
-                    <td className="border px-4 py-2">{rec.controlnum}</td>
-                    <td className="border px-4 py-2">{rec.title}</td>
-                    <td className="border px-4 py-2">{rec.classification}</td>
-                    <td className="border px-4 py-2">{rec.priority}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
