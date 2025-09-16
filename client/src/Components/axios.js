@@ -1,11 +1,11 @@
-// src/axios.js
+// client/src/Components/axios.js
 import axios from "axios";
 
 axios.defaults.baseURL = "http://localhost:8081";
 
 // Attach token to every request
 axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem("authToken");
+  const token = localStorage.getItem("token"); // unified key
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -17,10 +17,12 @@ axios.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      localStorage.removeItem("authToken");
+      // Clear auth and bounce to login
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
       localStorage.removeItem("userEmail");
       localStorage.removeItem("userRole");
-      window.location.href = "/"; // force back to login
+      window.location.href = "/";
     }
     return Promise.reject(error);
   }

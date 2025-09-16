@@ -1,65 +1,79 @@
-// AuthContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getStoredUser, refreshToken, clearAuth, isTokenExpired } from './utils/auth';
+// src/AuthContext.js
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
-const AuthContext = createContext();
+import {
+  getStoredUser,
+  refreshToken,
+  clearAuth,
+  isTokenExpired,
+} from "./utils/auth";
+
+const AuthContext = createContext(null);
 
 export function useAuth() {
-    return useContext(AuthContext);
+  return useContext(AuthContext);
 }
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-        const navigate = useNavigate(); // ✅
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-    useEffect(() => {
-        initializeAuth();
-    }, []);
+useEffect(() => {
+  (async () => {
+    const storedUser = getStoredUser();
+    if (storedUser) {
+      setUser(storedUser);
+      // keep LS convenience keys in sync for UI that still reads them
+      localStorage.setItem("userEmail", storedUser.email || "");
+      localStorage.setItem("userRole", storedUser.role || "");
+      setLoading(false);
+      return;
+    }
+    if (isTokenExpired()) {
+      const refreshed = await refreshToken();
+      if (refreshed) {
+        setUser(refreshed);
+        localStorage.setItem("userEmail", refreshed.email || "");
+        localStorage.setItem("userRole", refreshed.role || "");
+      } else {
+        clearAuth();
+      }
+    }
+    setLoading(false);
+  })();
+}, []);
 
-    const initializeAuth = async () => {
-        const storedUser = getStoredUser();
-        
-        if (storedUser) {
-            setUser(storedUser);
-        } else if (isTokenExpired()) {
-            // Try to refresh the token
-            const refreshedUser = await refreshToken();
-            if (refreshedUser) {
-                setUser(refreshedUser);
-            } else {
-                clearAuth();
-            }
-        }
-        
-        setLoading(false);
-    };
+ const login = useCallback((userData, accessToken, refreshTok) => {
+  if (accessToken) localStorage.setItem("token", accessToken);
+  if (refreshTok) localStorage.setItem("refreshToken", refreshTok);
+  if (userData) {
+    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("userEmail", userData.email || "");
+    localStorage.setItem("userRole", userData.role || "");
+  }
+  setUser(userData ?? null);
+}, []);
 
-    const login = (userData, token, refreshToken) => {
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(userData));
-        if (refreshToken) {
-            localStorage.setItem("refreshToken", refreshToken);
-        }
-        setUser(userData);
-    };
+  const logout = useCallback(() => {
+    clearAuth();
+    setUser(null);
+    navigate("/", { replace: true });
+  }, [navigate]);
 
-   const logout = () => {
-  clearAuth();
-  setUser(null);
-  navigate("/", { replace: true }); // ✅ replaces history
-};
+  const value = useMemo(
+    () => ({ user, login, logout, loading }),
+    [user, loading, login, logout]
+  );
 
-    const value = {
-        user,
-        login,
-        logout,
-        loading
-    };
-
-    return (
-        <AuthContext.Provider value={value}>
-            {children}
-        </AuthContext.Provider>
-    );
+  return (
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  );
 }

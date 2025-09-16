@@ -1,11 +1,12 @@
-// App.js
+// client/src/App.js
+import React from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./AuthContext";
 
-// Public
-import Login from "./login";
-import Signup from "./Signup";
+// Public pages
+import Login from "./login";     // <- make sure the filename matches casing
+import Signup from "./Signup";   // <- make sure the filename matches casing
 
 // Admin pages
 import Dashboard from "./Components/Dashboard";
@@ -15,14 +16,18 @@ import CreateUserPage from "./Components/CreateUserPage";
 import AllRecords from "./Components/AllRecords";
 import Analytics from "./Components/Analytics";
 import AllUsers from "./Components/AllUsers";
-
+import CreateUserForm from "./Components/CreateUserForm";
 // User pages
 import UserDashboard from "./Components/UserDashboard";
 
 // Utils
 import ProtectedRoute from "./Components/ProtectedRoute";
 
-function App() {
+// Optional shared layout:
+// If you want ONE place for Sidebar/Navbar, uncomment and wrap admin/user routes.
+// import AppLayout from "./AppLayout";
+
+export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -31,7 +36,28 @@ function App() {
           <Route path="/" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
-          {/* Admin-only Routes */}
+          {/* --------- Admin-only Routes --------- */}
+          {/* If using a shared layout, you can group like this:
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AppLayout>
+                  <Outlet />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/createrecord" element={<CreateRecordForm />} />
+            <Route path="/createrecordpage" element={<CreateRecordPage />} />
+            <Route path="/createuser" element={<CreateUserPage />} />
+            <Route path="/all" element={<AllRecords />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/dashboard/all-users" element={<AllUsers />} />
+          </Route>
+          */}
+
+          {/* Without shared layout (components render their own Sidebar/Navbar) */}
           <Route
             path="/dashboard"
             element={
@@ -89,7 +115,7 @@ function App() {
             }
           />
 
-          {/* Normal User-only Route */}
+          {/* --------- Normal User-only Route --------- */}
           <Route
             path="/user-dashboard"
             element={
@@ -103,5 +129,3 @@ function App() {
     </BrowserRouter>
   );
 }
-
-export default App;

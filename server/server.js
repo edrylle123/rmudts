@@ -12,8 +12,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ====== JWT SECRET ======
-const JWT_SECRET = "edryllepogisagad"; // move to .env in production
+  // ====== JWT SECRET ======
+const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret_change_me";
+const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "dev_refresh_secret_change_me";
+
 
 // ====== Database Connection ======
 const db = mysql.createConnection({
@@ -186,6 +188,29 @@ app.post("/login", (req, res) => {
   );
 });
 
+app.post('/refresh-token', (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ error: 'refreshToken required' });
+
+  // Verify refresh token using refresh secret
+  jwt.verify(refreshToken, REFRESH_TOKEN_SECRET, (err, decoded) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired refresh token' });
+
+    // Optionally check decoded against DB-stored refresh tokens to ensure not revoked
+
+    // Create a new access token (short-lived)
+    const newToken = jwt.sign(
+      { id: decoded.id, email: decoded.email, role: decoded.role, name: decoded.name, office: decoded.office },
+      JWT_SECRET,
+      { expiresIn: '1h' } // or 15m as you prefer
+    );
+
+    return res.json({
+      token: newToken,
+      user: { id: decoded.id, email: decoded.email, role: decoded.role, name: decoded.name, office: decoded.office },
+    });
+  });
+});
 
 // ====== USERS API (Admin only) ======
 app.get("/users", verifyToken, verifyAdmin, (req, res) => {
