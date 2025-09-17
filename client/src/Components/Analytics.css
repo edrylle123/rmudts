@@ -1,0 +1,118 @@
+/* client/src/Components/Analytics.css */
+
+.analytics {
+  background: #f8fafc;
+}
+
+/* Header */
+.page-title {
+  font-weight: 700;
+}
+
+/* KPI cards */
+.stat-card {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  box-shadow: 0 1px 2px rgba(16,24,40,.03);
+}
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 20px;
+}
+.stat-body .stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.stat-body .stat-label {
+  font-size: 12px;
+  color: #64748b;
+}
+.stat-body .stat-trend {
+  font-size: 12px;
+}
+
+/* range select + buttons */
+.range-select {
+  min-width: 160px;
+}
+
+/* Panels */
+.panel {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.03);
+}
+.panel-header {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 8px;
+}
+.link-muted {
+  color: #64748b;
+  text-decoration: none;
+}
+.link-muted:hover { text-decoration: underline; }
+
+/* segmented control */
+.segmented {
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding: 4px;
+  display: inline-flex;
+  gap: 4px;
+}
+.seg-btn {
+  border: none;
+  background: transparent;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #0f172a;
+}
+.seg-btn.active {
+  background: #2563eb;
+  color: #fff;
+}
+
+/* Top Offices list */
+.top-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.top-item:last-child { border-bottom: 0; }
+.rank {
+  font-weight: 700;
+  margin-top: 2px;
+}
+.rank-1 { color: #16a34a; }
+.rank-2 { color: #2563eb; }
+.rank-3 { color: #f59e0b; }
+
+/* Alert cards */
+.alert-card {
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.alert-red   { background: #fee2e2; border: 1px solid #fecaca; }
+.alert-yellow{ background: #fef3c7; border: 1px solid #fde68a; }
+.alert-blue  { background: #e0f2fe; border: 1px solid #bae6fd; }
+
+/* Quick actions */
+.qa-item { margin-bottom: 8px; }
+.qa-item:last-child { margin-bottom: 0; }
+
+/* Misc */
+.fw-600 { font-weight: 600; }

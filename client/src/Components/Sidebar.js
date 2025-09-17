@@ -14,23 +14,35 @@ export default function Sidebar() {
     </li>
   );
 
+  // ---------- NORMAL USER MENU ----------
+  if (role !== "admin") {
+    return (
+      <div className="sidebar bg-light vh-100 p-3 d-flex flex-column">
+        <h4 className="mb-4">Records System</h4>
+        <ul className="list-unstyled flex-grow-1">
+          {/* User's dashboard */}
+          <Item to="/user-dashboard">Dashboard</Item>
+
+          {/* All Records = records for the logged-in user's office only
+              (server enforces this on /records/my-office) */}
+          <Item to="/all">All Records</Item>
+        </ul>
+      </div>
+    );
+  }
+
+  // ---------- ADMIN MENU ----------
   return (
     <div className="sidebar bg-light vh-100 p-3 d-flex flex-column">
       <h4 className="mb-4">Records System</h4>
       <ul className="list-unstyled flex-grow-1">
         <Item to="/dashboard">Dashboard</Item>
-        <Item to="/user-dashboard">My Dashboard</Item>
         <Item to="/createrecord">Create Record</Item>
         <Item to="/all">All Records</Item>
         <Item to="/analytics">Analytics</Item>
-
-        {role === "admin" && (
-          <>
-            <hr/>
-            <Item to="/createuser">Create User</Item>
-            <Item to="/dashboard/all-users">All Users</Item>
-          </>
-        )}
+        <hr />
+        <Item to="/createuser">Create User</Item>
+        <Item to="/dashboard/all-users">All Users</Item>
       </ul>
     </div>
   );

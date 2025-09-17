@@ -3,6 +3,7 @@ import React from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./AuthContext";
+import AttachmentViewer from "./Components/AttachmentViewer";
 
 // Public pages
 import Login from "./login";     // <- make sure the filename matches casing
@@ -93,7 +94,7 @@ export default function App() {
           <Route
             path="/all"
             element={
-              <ProtectedRoute allowedRoles={["admin"]}>
+              <ProtectedRoute allowedRoles={["admin", "user"]}>
                 <AllRecords />
               </ProtectedRoute>
             }
@@ -114,6 +115,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+  path="/view"
+  element={
+    <ProtectedRoute allowedRoles={["admin", "user"]}>
+      <AttachmentViewer />
+    </ProtectedRoute>
+  }
+/>
 
           {/* --------- Normal User-only Route --------- */}
           <Route

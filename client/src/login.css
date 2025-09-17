@@ -1,0 +1,11 @@
+/* client/src/login.css */
+.login-page {
+  min-height: 100vh;
+  background: #f6f7fb;
+  padding: 24px;
+}
+
+.login-page .card {
+  border: none;
+  border-radius: 12px;
+}

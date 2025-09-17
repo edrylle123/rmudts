@@ -1,31 +1,37 @@
 // client/src/Components/axios.js
-import axios from "axios";
+import Axios from "axios";
 
-axios.defaults.baseURL = "http://localhost:8081";
+const baseURL =
+  process.env.REACT_APP_API_BASE?.replace(/\/$/, "") || "http://localhost:8081";
 
-// Attach token to every request
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token"); // unified key
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
+const axios = Axios.create({
+  baseURL,
+  withCredentials: false, // not using cookies for auth
 });
 
-// Handle expired token response
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear auth and bounce to login
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("userEmail");
-      localStorage.removeItem("userRole");
-      window.location.href = "/";
+// Attach Authorization header for protected routes
+axios.interceptors.request.use((config) => {
+  const needsAuth =
+    config.url &&
+    !config.url.includes("/login") &&
+    !config.url.includes("/signup") &&
+    !config.url.includes("/refresh-token") &&
+    !config.url.includes("/uploads/"); // static files
+
+  if (needsAuth) {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return Promise.reject(error);
   }
-);
+
+  // Ensure absolute URL for direct file fetches if caller passed full path
+  if (/^\/uploads\//.test(config.url)) {
+    config.url = baseURL + config.url;
+  }
+
+  return config;
+});
 
 export default axios;

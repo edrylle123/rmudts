@@ -1,83 +1,133 @@
-// src/Login.js
+// client/src/login.js
 import React, { useState } from "react";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "./AuthContext";
+import axios from "./Components/axios";
+import "./login.css";
 
 export default function Login() {
-  const [values, setValues] = useState({ email: "", password: "" });
-  const [errors] = useState({});
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleInput = (e) => {
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  const onChange = (e) => {
     const { name, value } = e.target;
-    setValues((p) => ({ ...p, [name]: value }));
+    setForm((s) => ({ ...s, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setErr("");
+
+    if (!form.email.trim() || !form.password.trim()) {
+      setErr("Email and password are required.");
+      return;
+    }
 
     try {
-      const res = await axios.post("http://localhost:8081/login", values);
+      setLoading(true);
+      const res = await axios.post("/login", {
+        email: form.email.trim(),
+        password: form.password,
+      });
 
-      if (res.data.success) {
-        // Save token + user in localStorage
-        localStorage.setItem("token", res.data.token);
-        localStorage.setItem("user", JSON.stringify(res.data.user));
+      // Expected server response:
+      // { success:true, token, refreshToken, user: { id, name, email, role, office, idnumber? } }
+      const { token, refreshToken, user } = res.data || {};
 
-        // Redirect based on role
- if (res.data.user.role === "admin") {
-  navigate("/dashboard", { replace: true });
-} else {
-  navigate("/user-dashboard", { replace: true });
-}
-      } else {
-        alert(res.data.message);
+      if (!token || !user) {
+        throw new Error("Malformed server response.");
       }
-    } catch (err) {
-      console.error("Login error:", err);
-      alert("Something went wrong");
+
+      // Store tokens & user (AuthContext will also persist)
+      login(user, token, refreshToken);
+
+      // extra convenience keys for Navbar, etc.
+      localStorage.setItem("userEmail", user.email || "");
+      localStorage.setItem("userRole", user.role || "");
+      localStorage.setItem("userOffice", user.office || "");
+
+      // redirect based on role
+      if ((user.role || "").toLowerCase() === "admin") {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/user-dashboard", { replace: true });
+      }
+    } catch (error) {
+      // Helpful error messages
+      if (error.response) {
+        // Server responded with a status code
+        const msg =
+          error.response.data?.message ||
+          error.response.data?.error ||
+          `Login failed (HTTP ${error.response.status}).`;
+        setErr(msg);
+        console.error("Login error (response):", error.response);
+      } else if (error.request) {
+        // No response received
+        setErr("Cannot reach the server. Is the backend running on http://localhost:8081?");
+        console.error("Login error (no response):", error.request);
+      } else {
+        // Something else
+        setErr(error.message || "Unexpected error during login.");
+        console.error("Login error:", error);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="d-flex justify-content-center align-items-center vh-100 bg-primary">
-      <div className="bg-white p-4 rounded w-25">
-        <h2 className="mb-4 text-center">Login</h2>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-3">
-            <label>
-              <strong>Email:</strong>
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={values.email}
-              onChange={handleInput}
-              className="form-control rounded-0"
-              placeholder="Enter your email"
-            />
-            <span className="text-danger">{errors.email}</span>
-          </div>
+    <div className="login-page d-flex align-items-center justify-content-center">
+      <div className="card shadow" style={{ width: 420, maxWidth: "92%" }}>
+        <div className="card-body">
+          <h3 className="card-title mb-3 text-center">Sign in</h3>
 
-          <div className="mb-3">
-            <label>
-              <strong>Password:</strong>
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={values.password}
-              onChange={handleInput}
-              className="form-control rounded-0"
-              placeholder="Enter your password"
-            />
-            <span className="text-danger">{errors.password}</span>
-          </div>
+          {err && <div className="alert alert-danger">{err}</div>}
 
-          <button className="btn btn-success w-100 rounded-0" type="submit">
-            Login
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="d-grid gap-3">
+            <div>
+              <label className="form-label">Email</label>
+              <input
+                type="email"
+                name="email"
+                className="form-control"
+                value={form.email}
+                onChange={onChange}
+                placeholder="you@example.com"
+                autoComplete="username"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="form-label">Password</label>
+              <input
+                type="password"
+                name="password"
+                className="form-control"
+                value={form.password}
+                onChange={onChange}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+              />
+            </div>
+
+            <button className="btn btn-primary" type="submit" disabled={loading}>
+              {loading ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+
+          <div className="mt-3 text-center">
+            <small className="text-muted">
+              No account? <Link to="/signup">Create one</Link>
+            </small>
+          </div>
+        </div>
       </div>
     </div>
   );

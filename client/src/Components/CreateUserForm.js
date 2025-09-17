@@ -1,20 +1,15 @@
-// client/src/Components/CreateRecordForm.js
+// src/Components/CreateUserForm.js
 import React, { useState } from "react";
-import "./CreateRecordForm.css";
-import Sidebar from "./Sidebar";
-import Navbar from "./Navbar";
+import "./CreateUserForm.css";
 import axios from "./axios";
 
-export default function CreateRecordForm() {
+export default function CreateUserForm() {
   const [formData, setFormData] = useState({
-    title: "",
-    controlnum: "",
-    classification: "",
-    priority: "Normal",
-    description: "",
-    source: "",
-    retention: "1 Year",
-    destination_office: "",
+    name: "",
+    email: "",
+    password: "",
+    role: "user",
+    office: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -29,87 +24,119 @@ export default function CreateRecordForm() {
     setSaving(true);
     setError(null);
     try {
-      await axios.post("/records", formData);
-      alert("Record created!");
-      setFormData({
-        title: "",
-        controlnum: "",
-        classification: "",
-        priority: "Normal",
-        description: "",
-        source: "",
-        retention: "1 Year",
-        destination_office: "",
-      });
+      await axios.post("/signup", formData);
+      alert("User created successfully!");
+      setFormData({ name: "", email: "", password: "", role: "user", office: "" });
     } catch (err) {
       console.error(err);
-      setError("Failed to create record");
+      setError("Error creating user");
     } finally {
       setSaving(false);
     }
   };
 
+  const resetForm = () =>
+    setFormData({ name: "", email: "", password: "", role: "user", office: "" });
+
   return (
-    <div className="d-flex">
-      <Sidebar />
-      <div className="flex-grow-1">
-        <Navbar />
-        <div className="container p-3">
-          <h2 className="mb-3">Create New Record</h2>
-          {error && <div className="alert alert-danger">{error}</div>}
-          <form onSubmit={handleSubmit} className="row g-3">
-            <div className="col-md-6">
-              <label className="form-label">Title *</label>
-              <input className="form-control" name="title" required value={formData.title} onChange={handleChange} />
-            </div>
-            <div className="col-md-6">
-              <label className="form-label">Control No.</label>
-              <input className="form-control" name="controlnum" value={formData.controlnum} onChange={handleChange} />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Classification</label>
-              <input className="form-control" name="classification" value={formData.classification} onChange={handleChange} />
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Priority</label>
-              <select className="form-select" name="priority" value={formData.priority} onChange={handleChange}>
-                <option>Low</option>
-                <option>Normal</option>
-                <option>High</option>
-              </select>
-            </div>
-            <div className="col-md-4">
-              <label className="form-label">Retention</label>
-              <select className="form-select" name="retention" value={formData.retention} onChange={handleChange}>
-                <option>1 Year</option>
-                <option>3 Years</option>
-                <option>5 Years</option>
-                <option>Permanent</option>
-              </select>
-            </div>
-            <div className="col-12">
-              <label className="form-label">Description</label>
-              <textarea className="form-control" rows="3" name="description" value={formData.description} onChange={handleChange} />
-            </div>
-            <div className="col-md-6">
-              <label className="form-label">Source</label>
-              <input className="form-control" name="source" value={formData.source} onChange={handleChange} />
-            </div>
-            <div className="col-md-6">
-              <label className="form-label">Destination Office</label>
-              <input className="form-control" name="destination_office" value={formData.destination_office} onChange={handleChange} />
-            </div>
-            <div className="col-12 d-flex gap-2">
-              <button type="submit" className="btn btn-primary" disabled={saving}>
-                {saving ? "Saving…" : "Create Record"}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={() => window.history.back()}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
+    <form onSubmit={handleSubmit} className="row g-3">
+      {error && <div className="alert alert-danger">{error}</div>}
+
+      <div className="col-md-6">
+        <label className="form-label">Full Name *</label>
+        <input
+          type="text"
+          name="name"
+          className="form-control"
+          value={formData.name}
+          onChange={handleChange}
+          required
+        />
       </div>
-    </div>
+
+      <div className="col-md-6">
+        <label className="form-label">Email *</label>
+        <input
+          type="email"
+          name="email"
+          className="form-control"
+        value={formData.email}
+          onChange={handleChange}
+          required
+        />
+      </div>
+
+      <div className="col-md-6">
+        <label className="form-label">Password *</label>
+        <input
+          type="password"
+          name="password"
+          className="form-control"
+          value={formData.password}
+          onChange={handleChange}
+          required
+        />
+      </div>
+
+      <div className="col-md-6">
+        <label className="form-label">Role *</label>
+        <select
+          name="role"
+          className="form-select"
+          value={formData.role}
+          onChange={handleChange}
+        >
+          <option value="user">Office Secretary</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <div className="col-md-12">
+        <label className="form-label">Office *</label>
+        <select
+          name="office"
+          className="form-select"
+          value={formData.office}
+          onChange={handleChange}
+          required
+        >
+          <option value="">-- Choose an Office --</option>
+          <option>Office of the President</option>
+          <option>VP Admin and Finance</option>
+          <option>VP Academic Research and Extension</option>
+          <option>Office of the Campus Administrator</option>
+          <option>Office of the University Board Secretary</option>
+          <option>Office of the Supervising Administrative Officer</option>
+          <option>Office of the Chief Administrative Officer</option>
+          <option>Accounting Office</option>
+          <option>Cashier</option>
+          <option>Supply Office</option>
+          <option>Budget Office</option>
+          <option>Accounting and Finance Office</option>
+          <option>Planning and Development Office</option>
+          <option>Quality Assurance Office</option>
+          <option>Legal Unit</option>
+          <option>CITCS</option>
+          <option>Office of the Registrar</option>
+          <option>Alumni Office</option>
+          <option>Information Technology Office</option>
+          <option>General Services Unit</option>
+          <option>Project Management Unit</option>
+          <option>Information Office</option>
+          <option>International Relations Office</option>
+          <option>Procurement Office</option>
+          <option>Human Resource Management Office</option>
+        </select>
+      </div>
+
+      <div className="col-12 d-flex gap-2">
+        <button type="button" className="btn btn-secondary" onClick={resetForm}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? "Creating…" : "Create User"}
+        </button>
+      </div>
+    </form>
   );
 }
