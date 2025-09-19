@@ -12,7 +12,6 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
 
-// ----- colors to match the mock -----
 const COLORS = {
   blue: "#3b82f6",
   green: "#22c55e",
@@ -20,16 +19,14 @@ const COLORS = {
   red: "#ef4444",
   purple: "#a78bfa",
   slate: "#64748b",
-  gray: "#94a3b8",
 };
 
-// ----- helpers -----
 const parseRetentionDays = (r) => {
   const v = String(r || "").toLowerCase();
   if (v.includes("permanent")) return Infinity;
   if (v.includes("5")) return 365 * 5;
   if (v.includes("3")) return 365 * 3;
-  return 365; // default 1 year
+  return 365;
 };
 const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const weekKey = (d) => {
@@ -39,8 +36,13 @@ const weekKey = (d) => {
   return `${dt.getFullYear()}-W${String(week).padStart(2,"0")}`;
 };
 const monthKey = (d) => { const dt = new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`; };
+const quarterKey = (d) => {
+  const dt = new Date(d);
+  const q = Math.floor(dt.getMonth() / 3) + 1; // 1..4
+  return `${dt.getFullYear()}-Q${q}`;
+};
+const yearKey = (d) => String(new Date(d).getFullYear());
 
-// status from age vs retention + priority
 const computeStatus = (rec) => {
   const created = rec?.created_at ? new Date(rec.created_at) : null;
   if (!created) return "Pending";
@@ -56,22 +58,17 @@ const computeStatus = (rec) => {
   return "Pending";
 };
 
-// -------- CSV helpers (no deps) --------
+// CSV helpers (unchanged)
 const csvEscape = (val) => {
   const s = val == null ? "" : String(val);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 const makeCsv = (sections) => {
-  // sections: [{title, headers:[..], rows:[[..],..]}]
   let out = "";
   for (const sec of sections) {
     out += `# ${sec.title}\n`;
-    if (sec.headers?.length) {
-      out += sec.headers.map(csvEscape).join(",") + "\n";
-    }
-    if (sec.rows?.length) {
-      for (const row of sec.rows) out += row.map(csvEscape).join(",") + "\n";
-    }
+    if (sec.headers?.length) out += sec.headers.map(csvEscape).join(",") + "\n";
+    if (sec.rows?.length) for (const row of sec.rows) out += row.map(csvEscape).join(",") + "\n";
     out += "\n";
   }
   return out;
@@ -80,24 +77,21 @@ const downloadCsv = (csv, filename) => {
   const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 };
 
-// ---- main component ----
 export default function Analytics() {
   const [records, setRecords] = useState([]);
   const [usersCount, setUsersCount] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [seriesMode, setSeriesMode] = useState("Daily"); // Daily | Weekly | Monthly
+
+  // NEW: now supports "Quarterly" and "Yearly"
+  const [seriesMode, setSeriesMode] = useState("Daily"); // Daily | Weekly | Monthly | Quarterly | Yearly
+
   const user = JSON.parse(localStorage.getItem("user") || "null");
   const role = user?.role || "user";
 
-  // load records (and users if admin)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -109,12 +103,8 @@ export default function Analytics() {
           try {
             const u = await axios.get("/users");
             if (!cancelled) setUsersCount(Array.isArray(u.data) ? u.data.length : null);
-          } catch {
-            if (!cancelled) setUsersCount(null);
-          }
-        } else {
-          setUsersCount(null);
-        }
+          } catch { if (!cancelled) setUsersCount(null); }
+        } else setUsersCount(null);
       } catch (e) {
         console.error(e);
       } finally {
@@ -125,7 +115,6 @@ export default function Analytics() {
     return () => { cancelled = true; };
   }, [role]);
 
-  // normalized records with extras
   const rec = useMemo(() => {
     return records.map((r) => {
       const created = r?.created_at ? new Date(r.created_at) : null;
@@ -145,7 +134,6 @@ export default function Analytics() {
     });
   }, [records]);
 
-  // ---- KPI cards ----
   const avgProcessingTimeHrs = useMemo(() => {
     if (rec.length === 0) return 0;
     const sum = rec.reduce((a, b) => a + b.hoursOld, 0);
@@ -162,32 +150,47 @@ export default function Analytics() {
   const approvalRate = Math.round(((statusCounts.Approved || 0) / totalForRate) * 1000) / 10;
   const backlogItems = statusCounts.Pending || 0;
 
-  // ---- Volume trends ----
+  // ------- Volume trends (now includes Quarterly & Yearly) -------
   const volumeData = useMemo(() => {
     const map = new Map();
+    const add = (key) => map.set(key, (map.get(key) || 0) + 1);
+
     if (seriesMode === "Weekly") {
-      for (const r of rec) {
-        const key = weekKey(r.created_at);
-        map.set(key, (map.get(key) || 0) + 1);
+      for (const r of rec) add(weekKey(r.created_at));
+    } else if (seriesMode === "Monthly") {
+      for (const r of rec) add(monthKey(r.created_at));
+    } else if (seriesMode === "Quarterly") {
+      for (const r of rec) add(quarterKey(r.created_at));
+    } else if (seriesMode === "Yearly") {
+      for (const r of rec) add(yearKey(r.created_at));
+    } else {
+      // Daily
+      for (const r of rec) add(startOfDay(r.created_at).toISOString().slice(0, 10));
+    }
+
+    // Sort buckets chronologically
+    const toDateForSort = (bucket) => {
+      if (bucket.includes("-W")) {
+        const [y, w] = bucket.split("-W");
+        const d = new Date(Number(y), 0, 1 + (Number(w) - 1) * 7);
+        return d.getTime();
       }
-      return Array.from(map.entries()).map(([bucket, received]) => ({ bucket, received }));
-    }
-    if (seriesMode === "Monthly") {
-      for (const r of rec) {
-        const key = monthKey(r.created_at);
-        map.set(key, (map.get(key) || 0) + 1);
+      if (bucket.includes("-Q")) {
+        const [y, q] = bucket.split("-Q");
+        const month = (Number(q) - 1) * 3; // Q1->0
+        return new Date(Number(y), month, 1).getTime();
       }
-      return Array.from(map.entries()).map(([bucket, received]) => ({ bucket, received }));
-    }
-    // daily
-    for (const r of rec) {
-      const key = startOfDay(r.created_at).toISOString().slice(0, 10);
-      map.set(key, (map.get(key) || 0) + 1);
-    }
-    return Array.from(map.entries()).map(([bucket, received]) => ({ bucket, received }));
+      if (/^\d{4}-\d{2}$/.test(bucket)) return new Date(bucket + "-01").getTime();
+      if (/^\d{4}$/.test(bucket)) return new Date(bucket + "-01-01").getTime();
+      return new Date(bucket).getTime();
+    };
+
+    return Array.from(map.entries())
+      .sort((a, b) => toDateForSort(a[0]) - toDateForSort(b[0]))
+      .map(([bucket, received]) => ({ bucket, received }));
   }, [rec, seriesMode]);
 
-  // ---- Office workload (top 3 offices) ----
+  // ---- Office workload (top 3) ----
   const radar = useMemo(() => {
     const byOffice = new Map();
     for (const r of rec) {
@@ -200,15 +203,13 @@ export default function Analytics() {
     return arr.map(([subject, workload]) => ({ subject, workload }));
   }, [rec]);
 
-  // ---- Processing time (proxy: average age) by classification ----
+  // ---- Processing (avg age in hours) by classification ----
   const proc = useMemo(() => {
-    const sum = new Map(); // class -> [totalHours, count]
+    const sum = new Map();
     for (const r of rec) {
       const k = r.classification || "Others";
       const val = sum.get(k) || [0, 0];
-      val[0] += r.hoursOld;
-      val[1] += 1;
-      sum.set(k, val);
+      val[0] += r.hoursOld; val[1] += 1; sum.set(k, val);
     }
     const cls = ["Academic", "Administrative", "Financial", "HR", "Others"];
     return cls
@@ -220,7 +221,6 @@ export default function Analytics() {
       .filter((x) => x.hours > 0);
   }, [rec]);
 
-  // ---- Status distribution for pie (uses our statusCounts) ----
   const pieData = useMemo(
     () => [
       { name: "Pending", value: statusCounts.Pending || 0, color: COLORS.orange },
@@ -231,9 +231,7 @@ export default function Analytics() {
     [statusCounts]
   );
 
-  // ---- Retention aging bars ----
   const retention = useMemo(() => {
-    // buckets by record age
     const buckets = [
       { age: "0-6 months", min: 0, max: 182 },
       { age: "6-12 months", min: 182, max: 365 },
@@ -250,8 +248,8 @@ export default function Analytics() {
       const ratio = retentionDays === Infinity ? 0 : ageDays / retentionDays;
 
       const idx = res.findIndex((x) => {
-        const b = buckets.find((bb) => bb.age === x.age);
-        return ageDays >= b.min && ageDays < b.max;
+        const bb = buckets.find((b) => b.age === x.age);
+        return ageDays >= bb.min && ageDays < bb.max;
       });
       const row = res[idx >= 0 ? idx : 0];
 
@@ -264,14 +262,13 @@ export default function Analytics() {
     return res;
   }, [rec]);
 
-  // ---------- Quick Action: Report builders ----------
-  const filterByPeriod = (recordsNorm, period /* 'monthly' | 'yearly' */) => {
+  // ---------- Quick Action reports (unchanged) ----------
+  const filterByPeriod = (recordsNorm, period) => {
     const now = new Date();
     if (period === "yearly") {
       const y = now.getFullYear();
       return recordsNorm.filter((r) => r.created_at && new Date(r.created_at).getFullYear() === y);
     }
-    // monthly
     const y = now.getFullYear();
     const m = now.getMonth();
     return recordsNorm.filter((r) => {
@@ -282,14 +279,10 @@ export default function Analytics() {
   };
 
   const buildSummarySection = (rows, usersCountForCard) => {
-    const localStatusCounts = rows.reduce((acc, r) => {
-      acc[r.status] = (acc[r.status] || 0) + 1;
-      return acc;
-    }, {});
+    const localStatusCounts = rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] || 0) + 1; return acc; }, {});
     const total = rows.length || 1;
     const avgHrs = rows.length ? Math.round((rows.reduce((a,b)=>a+b.hoursOld,0)/rows.length)*10)/10 : 0;
     const approval = Math.round(((localStatusCounts.Approved||0) / total) * 1000)/10;
-
     return {
       title: "Summary",
       headers: ["Metric", "Value"],
@@ -304,68 +297,37 @@ export default function Analytics() {
       ],
     };
   };
-
   const buildClassificationSection = (rows) => {
     const map = new Map();
     for (const r of rows) map.set(r.classification, (map.get(r.classification) || 0) + 1);
-    return {
-      title: "By Classification",
-      headers: ["Classification", "Count"],
-      rows: Array.from(map.entries()),
-    };
+    return { title: "By Classification", headers: ["Classification", "Count"], rows: Array.from(map.entries()) };
   };
-
   const buildOfficeWorkloadSection = (rows) => {
     const map = new Map();
     for (const r of rows) map.set(r.destination_office, (map.get(r.destination_office) || 0) + 1);
-    return {
-      title: "Office Workload",
-      headers: ["Office", "Documents"],
-      rows: Array.from(map.entries()).sort((a,b)=>b[1]-a[1]),
-    };
+    return { title: "Office Workload", headers: ["Office", "Documents"], rows: Array.from(map.entries()).sort((a,b)=>b[1]-a[1]) };
   };
-
   const buildStatusSection = (rows) => {
     const map = rows.reduce((m, r) => { m[r.status] = (m[r.status] || 0) + 1; return m; }, {});
-    return {
-      title: "Status Distribution",
-      headers: ["Status", "Count"],
-      rows: Object.entries(map),
-    };
+    return { title: "Status Distribution", headers: ["Status", "Count"], rows: Object.entries(map) };
   };
-
   const buildVolumeSection = (rows, period) => {
     const map = new Map();
     if (period === "yearly") {
-      for (const r of rows) {
-        const bucket = monthKey(r.created_at);
-        map.set(bucket, (map.get(bucket) || 0) + 1);
-      }
-    } else { // monthly
-      for (const r of rows) {
-        const bucket = startOfDay(r.created_at).toISOString().slice(0,10);
-        map.set(bucket, (map.get(bucket) || 0) + 1);
-      }
+      for (const r of rows) map.set(monthKey(r.created_at), (map.get(monthKey(r.created_at)) || 0) + 1);
+      return { title: "Volume by Month", headers: ["Bucket", "Documents Received"], rows: Array.from(map.entries()) };
     }
-    return {
-      title: period === "yearly" ? "Volume by Month" : "Volume by Day",
-      headers: ["Bucket", "Documents Received"],
-      rows: Array.from(map.entries()),
-    };
+    for (const r of rows) map.set(startOfDay(r.created_at).toISOString().slice(0,10), (map.get(startOfDay(r.created_at).toISOString().slice(0,10)) || 0) + 1);
+    return { title: "Volume by Day", headers: ["Bucket", "Documents Received"], rows: Array.from(map.entries()) };
   };
-
   const buildRetentionList = (rows) => {
-    // List records nearing disposal or overdue
     const out = [["Control #","Title","Office","Created At","Retention","Status"]];
-    for (const r of rows) {
-      if (r.status === "Completed" || r.status === "Archived") {
-        out.push([r.control_number, r.title, r.destination_office, r.created_at, r.retention_period, r.status]);
-      }
-    }
+    for (const r of rows) if (r.status === "Completed" || r.status === "Archived")
+      out.push([r.control_number, r.title, r.destination_office, r.created_at, r.retention_period, r.status]);
     return out;
   };
 
-  const generatePeriodReport = (period /* 'monthly' | 'yearly' */) => {
+  const generatePeriodReport = (period) => {
     const filtered = filterByPeriod(rec, period);
     const sections = [
       buildSummarySection(filtered, usersCount ?? (role === "admin" ? "—" : (user?.email ? 1 : 0))),
@@ -378,29 +340,21 @@ export default function Analytics() {
     const stamp = new Date().toISOString().slice(0,10);
     downloadCsv(csv, `${period}-report-${stamp}.csv`);
   };
-
   const exportAnalyticsCsv = () => {
-    // raw records table
     const headers = ["Control #","Title","Classification","Priority","Office","Retention","Status","Created At"];
-    const rows = rec.map(r => [
-      r.control_number, r.title, r.classification, r.priority,
-      r.destination_office, r.retention_period, r.status, r.created_at
-    ]);
+    const rows = rec.map(r => [r.control_number, r.title, r.classification, r.priority, r.destination_office, r.retention_period, r.status, r.created_at]);
     const csv = makeCsv([{ title: "All Records (Visible Scope)", headers, rows }]);
     const stamp = new Date().toISOString().slice(0,10);
     downloadCsv(csv, `analytics-data-${stamp}.csv`);
   };
-
   const exportRetentionSchedule = () => {
     const rows = buildRetentionList(rec);
     const csv = makeCsv([{ title: "Retention Schedule (Nearing & Overdue)", headers: rows[0], rows: rows.slice(1) }]);
     const stamp = new Date().toISOString().slice(0,10);
     downloadCsv(csv, `retention-schedule-${stamp}.csv`);
   };
-
   const exportReport = () => window.print();
 
-  // ---- UI ----
   return (
     <div className="d-flex">
       <Sidebar />
@@ -408,15 +362,11 @@ export default function Analytics() {
         <Navbar />
 
         <div className="analytics container-fluid p-3 p-md-4">
-          {/* Header */}
           <div className="d-flex align-items-center justify-content-between mb-3 mb-md-4">
             <div>
               <h2 className="page-title mb-0">Analytics Dashboard</h2>
-              <div className="text-muted small">
-                Comprehensive document tracking and performance metrics
-              </div>
+              <div className="text-muted small">Comprehensive document tracking and performance metrics</div>
             </div>
-
             <div className="d-flex gap-2">
               <select className="form-select range-select" defaultValue="Last 30 Days" disabled>
                 <option>Last 7 Days</option>
@@ -442,7 +392,6 @@ export default function Analytics() {
                 </div>
               </div>
             </div>
-
             <div className="col-12 col-sm-6 col-lg-3">
               <div className="stat-card">
                 <div className="stat-icon" style={{ background: "rgba(34,197,94,.12)", color: COLORS.green }}>✅</div>
@@ -453,7 +402,6 @@ export default function Analytics() {
                 </div>
               </div>
             </div>
-
             <div className="col-12 col-sm-6 col-lg-3">
               <div className="stat-card">
                 <div className="stat-icon" style={{ background: "rgba(245,158,11,.12)", color: COLORS.orange }}>⏱️</div>
@@ -464,7 +412,6 @@ export default function Analytics() {
                 </div>
               </div>
             </div>
-
             <div className="col-12 col-sm-6 col-lg-3">
               <div className="stat-card">
                 <div className="stat-icon" style={{ background: "rgba(167,139,250,.12)", color: COLORS.purple }}>👤</div>
@@ -484,7 +431,7 @@ export default function Analytics() {
                 <div className="panel-header">
                   <h5 className="mb-0">Document Volume Trends</h5>
                   <div className="segmented">
-                    {["Daily","Weekly","Monthly"].map((m) => (
+                    {["Daily","Weekly","Monthly","Quarterly","Yearly"].map((m) => (
                       <button
                         key={m}
                         className={`seg-btn ${seriesMode === m ? "active" : ""}`}
@@ -541,7 +488,7 @@ export default function Analytics() {
               <div className="panel">
                 <div className="panel-header d-flex justify-content-between align-items-center">
                   <h5 className="mb-0">Processing Time Analysis</h5>
-                  <select className="form-select form-select-sm w-auto" defaultValue="By…">
+                  <select className="form-select form-select-sm w-auto" defaultValue="By…" disabled>
                     <option>By…</option>
                   </select>
                 </div>
@@ -608,7 +555,7 @@ export default function Analytics() {
             </div>
           </div>
 
-          {/* Bottom row: Top Offices / Alerts / Quick Actions */}
+          {/* Bottom row */}
           <div className="row g-3 g-lg-4">
             <div className="col-12 col-lg-4">
               <div className="panel">

@@ -465,8 +465,8 @@ app.get("/records/next-control-number", (req, res) => {
   });
 });
 
-// Create new record with files -> auto-convert to PDF
-app.post("/records", upload.array("files"), async (req, res) => {
+// POST create new record with files and destination office + record_origin
+app.post("/records", upload.array("files"), (req, res) => {
   const {
     title,
     classification,
@@ -475,34 +475,35 @@ app.post("/records", upload.array("files"), async (req, res) => {
     source,
     retention_period,
     destination_office,
+    record_origin, // "Internal" | "External"
   } = req.body;
-  const files = req.files || [];
-  const safePriority = (priority && String(priority).trim()) ? String(priority).trim() : "Normal";
+  const files = req.files;
 
+  // normalize origin to lowercase for DB
+  const origin = String(record_origin || "Internal").toLowerCase() === "external" ? "external" : "internal";
 
-  getNextControlNumber(async (err, nextNum) => {
+  getNextControlNumber((err, nextNum) => {
     if (err) return res.status(500).json({ error: "Error generating control number" });
 
     const sql = `
-      INSERT INTO records 
-      (title, classification, priority, description, source, retention_period, created_at, control_number, destination_office)
-      VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?)
+      INSERT INTO records
+      (title, classification, priority, description, source, retention_period, created_at, control_number, destination_office, record_origin)
+      VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)
     `;
     db.query(
       sql,
-      [title, classification, priority, description, source, retention_period, nextNum, destination_office],
-      async (err2, result) => {
-        if (err2) return res.status(500).json({ error: "Database insert error" });
+      [title, classification, priority, description, source, retention_period, nextNum, destination_office, origin],
+      (err, result) => {
+        if (err) return res.status(500).json({ error: "Database insert error" });
 
         const recordId = result.insertId;
 
-        // Always insert original files first
-        if (files.length > 0) {
+        if (files && files.length > 0) {
           const fileSql = `
             INSERT INTO record_files (record_id, file_name, file_type, file_size, file_path, retention_period, uploaded_at)
             VALUES ?
           `;
-          const originals = files.map((file) => [
+          const values = files.map((file) => [
             recordId,
             file.originalname,
             file.mimetype,
@@ -512,71 +513,32 @@ app.post("/records", upload.array("files"), async (req, res) => {
             new Date(),
           ]);
 
-          db.query(fileSql, [originals], async (fileErr) => {
+          db.query(fileSql, [values], (fileErr) => {
             if (fileErr) return res.status(500).json({ error: "File insert error" });
 
-            // Try to convert each file to PDF (image/office) and insert converted copies as extra rows
-            try {
-              const converted = await Promise.all(files.map((f) => convertToPdfIfNeeded(f)));
-              const pdfRows = converted
-                .filter(Boolean)
-                .map((c) => [
-                  recordId,
-                  c.name,
-                  c.type,
-                  c.size,
-                  c.pdfPath,
-                  retention_period,
-                  new Date(),
-                ]);
-
-              if (pdfRows.length > 0) {
-                db.query(fileSql, [pdfRows], (pdfErr) => {
-                  if (pdfErr) console.error("Insert converted PDF rows error:", pdfErr.message);
-                  return res.json({
-                    message: "✅ Record and files saved successfully (PDFs generated where possible)",
-                    recordId,
-                    control_number: nextNum,
-                    destination_office,
-                    files: originals,
-                    converted: pdfRows,
-                  });
-                });
-              } else {
-                return res.json({
-                  message: "✅ Record and files saved successfully",
-                  recordId,
-                  control_number: nextNum,
-                  destination_office,
-                  files: originals,
-                  converted: [],
-                });
-              }
-            } catch (convErr) {
-              console.error("Conversion error:", convErr && convErr.message);
-              return res.json({
-                message: "✅ Record saved (some files may not have been converted to PDF)",
-                recordId,
-                control_number: nextNum,
-                destination_office,
-                files: originals,
-                converted: [],
-              });
-            }
+            res.json({
+              message: "✅ Record and files saved successfully",
+              recordId,
+              control_number: nextNum,
+              destination_office,
+              record_origin: origin,
+              files: values,
+            });
           });
         } else {
-          // No file uploads
           res.json({
             message: "✅ Record saved (no files uploaded)",
             recordId,
             control_number: nextNum,
             destination_office,
+            record_origin: origin,
           });
         }
       }
     );
   });
 });
+
 
 // Records visible to current user (admin = all; user = office only)
 app.get("/records/my-office", verifyToken, (req, res) => {

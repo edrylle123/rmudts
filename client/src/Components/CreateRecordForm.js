@@ -13,9 +13,7 @@ const CLASSIFICATION_OPTIONS = [
   "Others",
 ];
 
-// EXACT office names as provided
 const DESTINATION_OFFICES = [
-  
   "Accounting Office",
   "Cashier",
   "supply office",
@@ -54,18 +52,23 @@ export default function CreateRecordForm() {
     source: "",
     retention: "1 Year",
     destination_office: "",
+    record_origin: "Internal", // NEW: Internal / External
   });
 
-  const [files, setFiles] = useState([]); // File[]
+  const [files, setFiles] = useState([]);
   const [uploadPct, setUploadPct] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // drag & drop state
+  // validation helpers (all fields required)
+  const [validated, setValidated] = useState(false);
+  const [filesError, setFilesError] = useState("");
+  const formRef = useRef(null);
+
+  // drag & drop
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
 
-  // --- Control number preview ---
   const loadNextControlNumber = async () => {
     try {
       setFetchingCn(true);
@@ -83,7 +86,6 @@ export default function CreateRecordForm() {
     loadNextControlNumber();
   }, []);
 
-  // --- handlers ---
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((s) => ({ ...s, [name]: value }));
@@ -96,52 +98,45 @@ export default function CreateRecordForm() {
     const cur = new Map(files.map((f) => [mapKey(f), f]));
     for (const f of incoming) cur.set(mapKey(f), f);
     setFiles(Array.from(cur.values()));
+    setFilesError("");
   };
-
   const handleFilesChange = (e) => {
     addFiles(e.target.files);
-    // reset so selecting same file again triggers change
     e.target.value = "";
   };
-
   const removeFile = (idx) => {
-    setFiles((list) => list.filter((_, i) => i !== idx));
+    const newList = files.filter((_, i) => i !== idx);
+    setFiles(newList);
+    if (newList.length === 0) setFilesError("Please attach at least one file.");
   };
 
-  // --- drag & drop events ---
-  const onDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!dragActive) setDragActive(true);
-  };
-  const onDragEnter = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!dragActive) setDragActive(true);
-  };
-  const onDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Avoid flicker when moving between children:
-    if (e.currentTarget.contains(e.relatedTarget)) return;
-    setDragActive(false);
-  };
-  const onDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    const dt = e.dataTransfer;
-    if (dt?.files?.length) addFiles(dt.files);
-  };
-
-  const openFileDialog = () => {
-    fileInputRef.current?.click();
-  };
+  // dnd handlers
+  const onDragOver = (e) => { e.preventDefault(); e.stopPropagation(); if (!dragActive) setDragActive(true); };
+  const onDragEnter = (e) => { e.preventDefault(); e.stopPropagation(); if (!dragActive) setDragActive(true); };
+  const onDragLeave = (e) => { e.preventDefault(); e.stopPropagation(); if (e.currentTarget.contains(e.relatedTarget)) return; setDragActive(false); };
+  const onDrop = (e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); const dt = e.dataTransfer; if (dt?.files?.length) addFiles(dt.files); };
+  const openFileDialog = () => fileInputRef.current?.click();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setSaving(true);
     setError(null);
+    setFilesError("");
+
+    // native required validation
+    const formEl = formRef.current;
+    const isNativeValid = formEl?.checkValidity?.() ?? true;
+    if (!isNativeValid) {
+      setValidated(true);
+      return;
+    }
+    // at least one file
+    if (files.length === 0) {
+      setValidated(true);
+      setFilesError("Please attach at least one file.");
+      return;
+    }
+
+    setSaving(true);
     setUploadPct(0);
     try {
       const fd = new FormData();
@@ -150,26 +145,22 @@ export default function CreateRecordForm() {
       fd.append("priority", formData.priority);
       fd.append("description", formData.description);
       fd.append("source", formData.source);
-      fd.append("retention_period", formData.retention); // backend expects retention_period
+      fd.append("retention_period", formData.retention);
       fd.append("destination_office", formData.destination_office);
-      // control number is assigned by the server
+      fd.append("record_origin", formData.record_origin); // NEW: send to backend
 
-      for (const f of files) {
-        fd.append("files", f); // multer expects "files"
-      }
+      for (const f of files) fd.append("files", f);
 
       await axios.post("/records", fd, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (evt) => {
           if (!evt.total) return;
-          const pct = Math.round((evt.loaded * 100) / evt.total);
-          setUploadPct(pct);
+          setUploadPct(Math.round((evt.loaded * 100) / evt.total));
         },
       });
 
       alert("Record created!");
 
-      // reset form
       setFormData({
         title: "",
         classification: "Academic",
@@ -178,11 +169,12 @@ export default function CreateRecordForm() {
         source: "",
         retention: "1 Year",
         destination_office: "",
+        record_origin: "Internal",
       });
       setFiles([]);
       setUploadPct(0);
-
-      // fetch next preview control number
+      setValidated(false);
+      setFilesError("");
       await loadNextControlNumber();
     } catch (err) {
       console.error(err);
@@ -196,9 +188,8 @@ export default function CreateRecordForm() {
     }
   };
 
-  // simple inline styles for the drop zone (works without extra CSS)
   const dropStyle = {
-    border: "2px dashed #999",
+    border: `2px dashed ${filesError ? "#dc3545" : "#999"}`,
     borderRadius: 12,
     padding: 16,
     textAlign: "center",
@@ -216,20 +207,14 @@ export default function CreateRecordForm() {
           <h2 className="mb-3">Create New Record</h2>
           {error && <div className="alert alert-danger">{error}</div>}
 
-          <form onSubmit={handleSubmit} className="row g-3" encType="multipart/form-data">
-            {/* Title */}
-            <div className="col-md-6">
-              <label className="form-label">Title *</label>
-              <input
-                className="form-control"
-                name="title"
-                required
-                value={formData.title}
-                onChange={handleChange}
-              />
-            </div>
-
-            {/* Control No. (auto preview) */}
+          <form
+            ref={formRef}
+            onSubmit={handleSubmit}
+            className={`row g-3 ${validated ? "was-validated" : ""}`}
+            encType="multipart/form-data"
+            noValidate
+          >
+            {/* Control No. preview */}
             <div className="col-md-6">
               <label className="form-label">Control No.</label>
               <div className="input-group">
@@ -248,12 +233,23 @@ export default function CreateRecordForm() {
                   {fetchingCn ? "…" : "Refresh"}
                 </button>
               </div>
-              <div className="form-text">
-                The official control number is assigned by the server on save.
-              </div>
+              <div className="form-text">The official control number is assigned by the server on save.</div>
             </div>
 
-            {/* Classification (required) */}
+            {/* Title */}
+            <div className="col-md-6">
+              <label className="form-label">Title *</label>
+              <input
+                className="form-control"
+                name="title"
+                required
+                value={formData.title}
+                onChange={handleChange}
+              />
+              <div className="invalid-feedback">Title is required.</div>
+            </div>
+
+            {/* Classification */}
             <div className="col-md-4">
               <label className="form-label">Classification *</label>
               <select
@@ -264,68 +260,75 @@ export default function CreateRecordForm() {
                 required
               >
                 {CLASSIFICATION_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
+                  <option key={opt} value={opt}>{opt}</option>
                 ))}
               </select>
+              <div className="invalid-feedback">Please select a classification.</div>
             </div>
 
             {/* Priority */}
             <div className="col-md-4">
-              <label className="form-label">Priority</label>
+              <label className="form-label">Priority *</label>
               <select
                 className="form-select"
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
+                required
               >
                 <option>Low</option>
                 <option>Normal</option>
                 <option>High</option>
               </select>
+              <div className="invalid-feedback">Please choose a priority.</div>
             </div>
 
             {/* Retention */}
             <div className="col-md-4">
-              <label className="form-label">Retention</label>
+              <label className="form-label">Retention *</label>
               <select
                 className="form-select"
                 name="retention"
                 value={formData.retention}
                 onChange={handleChange}
+                required
               >
                 <option>1 Year</option>
                 <option>3 Years</option>
                 <option>5 Years</option>
                 <option>Permanent</option>
               </select>
+              <div className="invalid-feedback">Please choose a retention period.</div>
             </div>
 
             {/* Description */}
             <div className="col-12">
-              <label className="form-label">Description</label>
+              <label className="form-label">Description *</label>
               <textarea
                 className="form-control"
                 rows="3"
                 name="description"
+                required
                 value={formData.description}
                 onChange={handleChange}
               />
+              <div className="invalid-feedback">Description is required.</div>
             </div>
 
-            {/* Source */}
+            {/* Concerned Personnel */}
             <div className="col-md-6">
-              <label className="form-label">Source</label>
+              <label className="form-label">Concerned Personnel *</label>
               <input
                 className="form-control"
                 name="source"
+                required
                 value={formData.source}
                 onChange={handleChange}
               />
+              <div className="invalid-feedback">This field is required.</div>
             </div>
 
-            {/* Destination Office (dropdown) */}
+            {/* Destination Office */}
             <div className="col-md-6">
               <label className="form-label">Destination Office *</label>
               <select
@@ -337,28 +340,39 @@ export default function CreateRecordForm() {
               >
                 <option value="">— Choose Destination Office —</option>
                 {DESTINATION_OFFICES.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
+                  <option key={opt} value={opt}>{opt}</option>
                 ))}
               </select>
+              <div className="invalid-feedback">Please choose a destination office.</div>
             </div>
 
-            {/* Drag & Drop Attachments */}
-            <div className="col-12">
-              <label className="form-label">Attachments</label>
+            {/* Record Origin (Internal/External) */}
+            <div className="col-md-6">
+              <label className="form-label">Record Origin *</label>
+              <select
+                className="form-select"
+                name="record_origin"
+                value={formData.record_origin}
+                onChange={handleChange}
+                required
+              >
+                <option>Internal</option>
+                <option>External</option>
+              </select>
+              <div className="invalid-feedback">Please select the record origin.</div>
+            </div>
 
-              {/* Hidden input for click-to-browse */}
+            {/* Attachments */}
+            <div className="col-12">
+              <label className="form-label">Attachments *</label>
               <input
                 ref={fileInputRef}
                 type="file"
                 multiple
                 className="d-none"
                 onChange={handleFilesChange}
-                // accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" // customize if needed
               />
 
-              {/* Drop zone */}
               <div
                 style={dropStyle}
                 onClick={openFileDialog}
@@ -369,22 +383,17 @@ export default function CreateRecordForm() {
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    openFileDialog();
-                  }
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openFileDialog(); }
                 }}
                 aria-label="File upload area"
               >
                 <div className="mb-1 fw-semibold">
                   Drag & drop files here, or <u>click to browse</u>
                 </div>
-                <div className="text-muted small">
-                  You can attach multiple files.
-                </div>
+                <div className="text-muted small">You must attach at least one file.</div>
               </div>
+              {filesError && <div className="invalid-feedback d-block">{filesError}</div>}
 
-              {/* Selected files list */}
               {files.length > 0 && (
                 <div className="mt-2">
                   <div className="small text-muted mb-1">
@@ -397,10 +406,7 @@ export default function CreateRecordForm() {
                         className="d-flex align-items-center justify-content-between"
                       >
                         <span className="small">
-                          {f.name}{" "}
-                          <span className="text-muted">
-                            ({Math.round(f.size / 1024)} KB)
-                          </span>
+                          {f.name} <span className="text-muted">({Math.round(f.size / 1024)} KB)</span>
                         </span>
                         <button
                           type="button"
@@ -417,19 +423,11 @@ export default function CreateRecordForm() {
               )}
             </div>
 
-            {/* Upload progress (if any) */}
+            {/* Upload progress */}
             {saving && uploadPct > 0 && (
               <div className="col-12">
-                <div
-                  className="progress"
-                  role="progressbar"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-valuenow={uploadPct}
-                >
-                  <div className="progress-bar" style={{ width: `${uploadPct}%` }}>
-                    {uploadPct}%
-                  </div>
+                <div className="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={uploadPct}>
+                  <div className="progress-bar" style={{ width: `${uploadPct}%` }}>{uploadPct}%</div>
                 </div>
               </div>
             )}
@@ -439,12 +437,7 @@ export default function CreateRecordForm() {
               <button type="submit" className="btn btn-primary" disabled={saving}>
                 {saving ? "Saving…" : "Create Record"}
               </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => window.history.back()}
-                disabled={saving}
-              >
+              <button type="button" className="btn btn-secondary" onClick={() => window.history.back()} disabled={saving}>
                 Cancel
               </button>
             </div>
