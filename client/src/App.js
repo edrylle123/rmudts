@@ -6,8 +6,8 @@ import { AuthProvider } from "./AuthContext";
 import AttachmentViewer from "./Components/AttachmentViewer";
 
 // Public pages
-import Login from "./login";     // <- make sure the filename matches casing
-import Signup from "./Signup";   // <- make sure the filename matches casing
+import Login from "./login";     // <- ensure actual filename/casing matches (e.g. "./Login")
+import Signup from "./Signup";   // <- ensure actual filename/casing matches
 
 // Admin pages
 import Dashboard from "./Components/Dashboard";
@@ -17,7 +17,9 @@ import CreateUserPage from "./Components/CreateUserPage";
 import AllRecords from "./Components/AllRecords";
 import Analytics from "./Components/Analytics";
 import AllUsers from "./Components/AllUsers";
-import CreateUserForm from "./Components/CreateUserForm";
+// import CreateUserForm from "./Components/CreateUserForm";
+import EditRecords from "./Components/EditRecords"; // <- FIXED import (no trailing "s")
+import DocumentTracking from "./Components/DocumentTracking";
 // User pages
 import UserDashboard from "./Components/UserDashboard";
 
@@ -25,40 +27,21 @@ import UserDashboard from "./Components/UserDashboard";
 import ProtectedRoute from "./Components/ProtectedRoute";
 
 // Optional shared layout:
-// If you want ONE place for Sidebar/Navbar, uncomment and wrap admin/user routes.
 // import AppLayout from "./AppLayout";
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+
+
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
           {/* --------- Admin-only Routes --------- */}
-          {/* If using a shared layout, you can group like this:
-          <Route
-            element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <AppLayout>
-                  <Outlet />
-                </AppLayout>
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/createrecord" element={<CreateRecordForm />} />
-            <Route path="/createrecordpage" element={<CreateRecordPage />} />
-            <Route path="/createuser" element={<CreateUserPage />} />
-            <Route path="/all" element={<AllRecords />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/dashboard/all-users" element={<AllUsers />} />
-          </Route>
-          */}
-
-          {/* Without shared layout (components render their own Sidebar/Navbar) */}
+          {/* With shared layout you could group these; keeping as-is for now */}
           <Route
             path="/dashboard"
             element={
@@ -91,6 +74,8 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          {/* Primary list path */}
           <Route
             path="/all"
             element={
@@ -99,6 +84,16 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* Alias to avoid "No routes matched /all-records" */}
+          <Route
+            path="/all-records"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "user"]}>
+                <AllRecords />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/analytics"
             element={
@@ -115,14 +110,24 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
-  path="/view"
-  element={
-    <ProtectedRoute allowedRoles={["admin", "user"]}>
-      <AttachmentViewer />
-    </ProtectedRoute>
-  }
-/>
+            path="/records/:id/edit"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <EditRecords />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/view"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "user"]}>
+                <AttachmentViewer />
+              </ProtectedRoute>
+            }
+          />
 
           {/* --------- Normal User-only Route --------- */}
           <Route
@@ -132,7 +137,17 @@ export default function App() {
                 <UserDashboard />
               </ProtectedRoute>
             }
+            
           />
+           {/* Document Tracking Route */}
+      <Route
+        path="/tracking"
+        element={
+          <ProtectedRoute allowedRoles={["admin","user"]}>
+            <DocumentTracking />
+          </ProtectedRoute>
+        }
+      />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

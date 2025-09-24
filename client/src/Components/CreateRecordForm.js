@@ -1,17 +1,12 @@
 // client/src/Components/CreateRecordForm.js
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import "./CreateRecordForm.css";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import axios from "./axios";
+import {QRCodeCanvas} from "qrcode.react";
 
-const CLASSIFICATION_OPTIONS = [
-  "Academic",
-  "Administrative",
-  "Financial",
-  "HR",
-  "Others",
-];
+const CLASSIFICATION_OPTIONS = ["Academic","Administrative","Financial","HR","Others"];
 
 const DESTINATION_OFFICES = [
   "Accounting Office",
@@ -40,27 +35,85 @@ const DESTINATION_OFFICES = [
   "Office of the Supervising Administrative Officer",
 ];
 
-export default function CreateRecordForm() {
-  const [nextControl, setNextControl] = useState("");
-  const [fetchingCn, setFetchingCn] = useState(false);
 
+const PRIORITY_OPTIONS = ["Low", "Normal", "High"];
+const RETENTION_OPTIONS = ["1 Year", "3 Years", "5 Years", "Permanent"];
+const ORIGIN_OPTIONS = ["Internal", "External"];
+
+// Reusable input + datalist with auto-normalize on blur
+function AutocompleteInput({
+  id,
+  label,
+  name,
+  value,
+  onChange,
+  options,
+  required = true,
+  placeholder,
+  helpText,
+}) {
+  const listId = `${id || name}-list`;
+
+  const normalizeOnBlur = () => {
+    if (!value) return;
+    const hit = options.find(
+      (opt) => opt.toLowerCase() === String(value).trim().toLowerCase()
+    );
+    if (hit && hit !== value) {
+      // snap to canonical casing
+      onChange({ target: { name, value: hit } });
+    }
+  };
+
+  return (
+    <div className="col-md-6">
+      <label className="form-label">{label}{required ? " *" : ""}</label>
+      <input
+        className="form-control"
+        name={name}
+        list={listId}
+        value={value}
+        onChange={onChange}
+        onBlur={normalizeOnBlur}
+        required={required}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      <datalist id={listId}>
+        {options.map((opt) => (
+          <option key={opt} value={opt} />
+        ))}
+      </datalist>
+      {required && <div className="invalid-feedback">This field is required.</div>}
+      {helpText && <div className="form-text">{helpText}</div>}
+    </div>
+  );
+}
+
+export default function CreateRecordForm() {
   const [formData, setFormData] = useState({
+    control_number: "",            // user-defined Control No.
     title: "",
-    classification: "Academic",
-    priority: "Normal",
+    classification: "",
+    priority: "",
     description: "",
     source: "",
-    retention: "1 Year",
+    retention: "",
     destination_office: "",
-    record_origin: "Internal", // NEW: Internal / External
+    record_origin: "",     // defaulted; still editable
   });
-
+const [activeOrigin, setActiveOrigin] = useState("Internal");
+const handleOriginSwitch = (origin) => {
+  setActiveOrigin(origin);
+  setFormData((s) => ({ ...s, record_origin: origin }));
+};
   const [files, setFiles] = useState([]);
   const [uploadPct, setUploadPct] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-
-  // validation helpers (all fields required)
+const [showQR, setShowQR] = useState(false);
+const [createdCN, setCreatedCN] = useState("");
+  // validation helpers
   const [validated, setValidated] = useState(false);
   const [filesError, setFilesError] = useState("");
   const formRef = useRef(null);
@@ -69,26 +122,15 @@ export default function CreateRecordForm() {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
 
-  const loadNextControlNumber = async () => {
-    try {
-      setFetchingCn(true);
-      const res = await axios.get("/records/next-control-number");
-      setNextControl(res?.data?.control_number || "");
-    } catch (e) {
-      console.error(e);
-      setNextControl("");
-    } finally {
-      setFetchingCn(false);
-    }
-  };
-
-  useEffect(() => {
-    loadNextControlNumber();
-  }, []);
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((s) => ({ ...s, [name]: value }));
+  };
+
+  // If you want to strictly require values to be from the list,
+  // enable this function and call it in handleSubmit (it is used below).
+  const ensureInList = (value, list) => {
+    return list.some((opt) => opt.toLowerCase() === String(value).trim().toLowerCase());
   };
 
   const mapKey = (f) => `${f.name}__${f.size}__${f.lastModified}`;
@@ -136,18 +178,51 @@ export default function CreateRecordForm() {
       return;
     }
 
+    // Strictly enforce allowed options (case-insensitive)
+    if (!ensureInList(formData.classification, CLASSIFICATION_OPTIONS)) {
+      setError("Classification must match one of the suggested options.");
+      return;
+    }
+    if (!ensureInList(formData.priority, PRIORITY_OPTIONS)) {
+      setError("Priority must be Low, Normal, or High.");
+      return;
+    }
+    if (!ensureInList(formData.retention, RETENTION_OPTIONS)) {
+      setError("Retention must match one of the suggested options.");
+      return;
+    }
+    if (!ensureInList(formData.record_origin, ORIGIN_OPTIONS)) {
+      setError("Record Origin must be Internal or External.");
+      return;
+    }
+    if (!ensureInList(formData.destination_office, DESTINATION_OFFICES)) {
+      setError("Destination Office must match one of the suggested offices.");
+      return;
+    }
+
     setSaving(true);
     setUploadPct(0);
     try {
       const fd = new FormData();
+      fd.append("control_number", formData.control_number);
       fd.append("title", formData.title);
-      fd.append("classification", formData.classification);
-      fd.append("priority", formData.priority);
+      fd.append("classification", CLASSIFICATION_OPTIONS.find(
+        o => o.toLowerCase() === formData.classification.toLowerCase()
+      ) || formData.classification);
+      fd.append("priority", PRIORITY_OPTIONS.find(
+        o => o.toLowerCase() === formData.priority.toLowerCase()
+      ) || formData.priority);
       fd.append("description", formData.description);
       fd.append("source", formData.source);
-      fd.append("retention_period", formData.retention);
-      fd.append("destination_office", formData.destination_office);
-      fd.append("record_origin", formData.record_origin); // NEW: send to backend
+      fd.append("retention_period", RETENTION_OPTIONS.find(
+        o => o.toLowerCase() === formData.retention.toLowerCase()
+      ) || formData.retention);
+      fd.append("destination_office", DESTINATION_OFFICES.find(
+        o => o.toLowerCase() === formData.destination_office.toLowerCase()
+      ) || formData.destination_office);
+      fd.append("record_origin", ORIGIN_OPTIONS.find(
+        o => o.toLowerCase() === formData.record_origin.toLowerCase()
+      ) || formData.record_origin);
 
       for (const f of files) fd.append("files", f);
 
@@ -162,12 +237,13 @@ export default function CreateRecordForm() {
       alert("Record created!");
 
       setFormData({
+        control_number: "",
         title: "",
-        classification: "Academic",
-        priority: "Normal",
+        classification: "",
+        priority: "",
         description: "",
         source: "",
-        retention: "1 Year",
+        retention: "",
         destination_office: "",
         record_origin: "Internal",
       });
@@ -175,7 +251,6 @@ export default function CreateRecordForm() {
       setUploadPct(0);
       setValidated(false);
       setFilesError("");
-      await loadNextControlNumber();
     } catch (err) {
       console.error(err);
       const msg =
@@ -206,6 +281,18 @@ export default function CreateRecordForm() {
         <div className="container p-3">
           <h2 className="mb-3">Create New Record</h2>
           {error && <div className="alert alert-danger">{error}</div>}
+<div className="mb-3 d-flex gap-2">
+  {ORIGIN_OPTIONS.map((opt) => (
+    <button
+      key={opt}
+      type="button"
+      onClick={() => handleOriginSwitch(opt)}
+      className={`btn ${activeOrigin === opt ? "btn-primary" : "btn-outline-primary"}`}
+    >
+      {opt}
+    </button>
+  ))}
+</div>
 
           <form
             ref={formRef}
@@ -214,26 +301,23 @@ export default function CreateRecordForm() {
             encType="multipart/form-data"
             noValidate
           >
-            {/* Control No. preview */}
+            {/* Control No. (User-defined) */}
             <div className="col-md-6">
-              <label className="form-label">Control No.</label>
-              <div className="input-group">
-                <input
-                  className="form-control"
-                  value={fetchingCn ? "Generating…" : nextControl || "(assigned on save)"}
-                  readOnly
-                />
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={loadNextControlNumber}
-                  disabled={fetchingCn}
-                  title="Refresh next Control No."
-                >
-                  {fetchingCn ? "…" : "Refresh"}
-                </button>
+              <label className="form-label">Control No. *</label>
+              <input
+                className="form-control"
+                name="control_number"
+                required
+                pattern="^[A-Za-z0-9\-_/\.]+$"
+                value={formData.control_number}
+                onChange={handleChange}
+                placeholder="e.g., 2025-09-001 or CAO-REC-000123"
+                autoComplete="off"
+              />
+              <div className="invalid-feedback">Control number is required.</div>
+              <div className="form-text">
+                Use your official format (letters, numbers, -, _, /, . allowed).
               </div>
-              <div className="form-text">The official control number is assigned by the server on save.</div>
             </div>
 
             {/* Title */}
@@ -245,62 +329,53 @@ export default function CreateRecordForm() {
                 required
                 value={formData.title}
                 onChange={handleChange}
+                autoComplete="off"
               />
               <div className="invalid-feedback">Title is required.</div>
             </div>
 
-            {/* Classification */}
-            <div className="col-md-4">
-              <label className="form-label">Classification *</label>
-              <select
-                className="form-select"
-                name="classification"
-                value={formData.classification}
-                onChange={handleChange}
-                required
-              >
-                {CLASSIFICATION_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-              <div className="invalid-feedback">Please select a classification.</div>
-            </div>
+            {/* Classification (input + datalist) */}
+            <AutocompleteInput
+              label="Classification"
+              name="classification"
+              value={formData.classification}
+              onChange={handleChange}
+              options={CLASSIFICATION_OPTIONS}
+              placeholder="Start typing… e.g., Academic"
+              helpText="Type to search and select a classification."
+            />
 
-            {/* Priority */}
-            <div className="col-md-4">
-              <label className="form-label">Priority *</label>
-              <select
-                className="form-select"
-                name="priority"
-                value={formData.priority}
-                onChange={handleChange}
-                required
-              >
-                <option>Low</option>
-                <option>Normal</option>
-                <option>High</option>
-              </select>
-              <div className="invalid-feedback">Please choose a priority.</div>
-            </div>
+            {/* Priority (input + datalist) */}
+            <AutocompleteInput
+              label="Priority"
+              name="priority"
+              value={formData.priority}
+              onChange={handleChange}
+              options={PRIORITY_OPTIONS}
+              placeholder="Start typing… e.g., Normal"
+              helpText="Type to search and select a priority."
+            />
 
-            {/* Retention */}
-            <div className="col-md-4">
-              <label className="form-label">Retention *</label>
-              <select
-                className="form-select"
-                name="retention"
-                value={formData.retention}
-                onChange={handleChange}
-                required
-              >
-                <option>1 Year</option>
-                <option>3 Years</option>
-                <option>5 Years</option>
-                <option>Permanent</option>
-              </select>
-              <div className="invalid-feedback">Please choose a retention period.</div>
-            </div>
-
+            {/* Retention (input + datalist) */}
+            <AutocompleteInput
+              label="Retention"
+              name="retention"
+              value={formData.retention}
+              onChange={handleChange}
+              options={RETENTION_OPTIONS}
+              placeholder="Start typing… e.g., 1 Year"
+              helpText="Type to search and select a retention period."
+            />
+{/* Record Origin (input + datalist) */}
+            {/* <AutocompleteInput
+              label="Record Origin"
+              name="record_origin"
+              value={formData.record_origin}
+              onChange={handleChange}
+              options={ORIGIN_OPTIONS}
+              placeholder="Start typing… e.g., Internal"
+              helpText="Type to search and select Internal or External."
+            /> */}
             {/* Description */}
             <div className="col-12">
               <label className="form-label">Description *</label>
@@ -321,46 +396,26 @@ export default function CreateRecordForm() {
               <input
                 className="form-control"
                 name="source"
-                required
+                
                 value={formData.source}
                 onChange={handleChange}
+                autoComplete="off"
               />
               <div className="invalid-feedback">This field is required.</div>
             </div>
 
-            {/* Destination Office */}
-            <div className="col-md-6">
-              <label className="form-label">Destination Office *</label>
-              <select
-                className="form-select"
-                name="destination_office"
-                value={formData.destination_office}
-                onChange={handleChange}
-                required
-              >
-                <option value="">— Choose Destination Office —</option>
-                {DESTINATION_OFFICES.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-              <div className="invalid-feedback">Please choose a destination office.</div>
-            </div>
+            {/* Destination Office (input + datalist) */}
+            <AutocompleteInput
+              label="Destination Office"
+              name="destination_office"
+              value={formData.destination_office}
+              onChange={handleChange}
+              options={DESTINATION_OFFICES}
+              placeholder="Start typing… e.g., Accounting Office"
+              helpText="Type to search and select a destination office."
+            />
 
-            {/* Record Origin (Internal/External) */}
-            <div className="col-md-6">
-              <label className="form-label">Record Origin *</label>
-              <select
-                className="form-select"
-                name="record_origin"
-                value={formData.record_origin}
-                onChange={handleChange}
-                required
-              >
-                <option>Internal</option>
-                <option>External</option>
-              </select>
-              <div className="invalid-feedback">Please select the record origin.</div>
-            </div>
+            
 
             {/* Attachments */}
             <div className="col-12">
@@ -442,6 +497,15 @@ export default function CreateRecordForm() {
               </button>
             </div>
           </form>
+          {/* QR Code popup */}
+        {/* QR Code popup */}
+{showQR && (
+  <div className="qr-modal">
+    <h4>QR Code for {createdCN}</h4>
+    <QRCodeCanvas value={createdCN} size={150} />
+    <button onClick={() => setShowQR(false)}>Close</button>
+  </div>
+)}
         </div>
       </div>
     </div>
