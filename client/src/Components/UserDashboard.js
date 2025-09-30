@@ -1,216 +1,707 @@
+// import React, { useEffect, useState } from "react";
+// import Sidebar from "./Sidebar";
+// import Navbar from "./Navbar";
+// import axios from "./axios";
+
+// import { socket } from "../socket"; // adjust path
+// import "./Dashboard.css";
+
+// export default function UserDashboard({ user }) {
+//   const [records, setRecords] = useState([]);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState(null);
+//   const [nextOffice, setNextOffice] = useState({});
+//   const [history, setHistory] = useState([]);
+//   const [showHistory, setShowHistory] = useState(false);
+//   const [selectedRecord, setSelectedRecord] = useState(null);
+//   const [offices, setOffices] = useState([]);
+
+//   const API_BASE =
+//     process.env.REACT_APP_API_BASE?.replace(/\/$/, "") || "http://localhost:8081";
+
+//   // ---- data loaders
+//   const reloadRecords = async () => {
+//     try {
+//       setLoading(true);
+//       const res = await axios.get("/records/my-office");
+//       const rows = Array.isArray(res.data) ? res.data : [];
+
+//       // group rows -> records with files[]
+//       const map = new Map();
+//       for (const r of rows) {
+//         const api_id = r?.id ?? r?.record_id ?? null;
+//         const recId = api_id || r?.control_number || Math.random().toString(36).slice(2);
+//         if (!map.has(recId)) {
+//           map.set(recId, {
+//             id: recId,
+//             api_id,
+//             control_number: r?.control_number || "",
+//             title: r?.title || "Untitled",
+//             classification: r?.classification || "",
+//             priority: r?.priority || "Normal",
+//             destination_office: r?.destination_office || "",
+//             document_type: r?.document_type || "Internal",
+//             created_at: r?.created_at || null,
+//             description: r?.description || "",
+//             files: [],
+//           });
+//         }
+//         if (r?.file_path) {
+//           map.get(recId).files.push({
+//             name: r.file_name || (r.file_path ? r.file_path.split("/").pop() : ""),
+//             type: r.file_type,
+//             size: r.file_size,
+//             path: r.file_path,
+//             retention_period: r.retention_period,
+//           });
+//         }
+//       }
+//       const grouped = Array.from(map.values()).sort((a, b) => {
+//         const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+//         const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+//         return bt - at;
+//       });
+//       setRecords(grouped);
+//       setError(null);
+//     } catch (e) {
+//       console.error(e);
+//       setError("Failed to load records");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   const loadOffices = async () => {
+//     try {
+//       const res = await axios.get("/offices");
+//       const raw = Array.isArray(res.data) ? res.data : [];
+//       const names = raw.map((x) => (typeof x === "string" ? x : x?.name)).filter(Boolean);
+//       const unique = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+//       setOffices(unique);
+//     } catch (e) {
+//       console.error("Failed to load offices", e);
+//       setOffices([]);
+//     }
+//   };
+
+//   // ---- socket
+//   // useEffect(() => {
+//   //   // Do not force websocket. Let Socket.IO fall back to polling if needed.
+//   //   const socket = io(API_BASE, {
+//   //     withCredentials: false,
+//   //     transports: ["polling", "websocket"],
+//   //     reconnection: true,
+//   //     reconnectionAttempts: Infinity,
+//   //     reconnectionDelay: 500,
+//   //     timeout: 10000,
+//   //     autoConnect: true,
+//   //   });
+
+//   //   socket.on("connect", () => {
+//   //     // console.log("socket connected", socket.id);
+//   //   });
+
+//   //   socket.on("recordUpdated", (data) => {
+//   //     if (data?.to_office === user?.office) reloadRecords();
+//   //     else setRecords((prev) => prev.filter((r) => r.id !== data?.record_id));
+//   //   });
+
+//   //   // initial loads
+//   //   reloadRecords();
+//   //   loadOffices();
+
+//   //   return () => {
+//   //     socket.removeAllListeners();
+//   //     socket.disconnect();
+//   //   };
+//   //   // eslint-disable-next-line react-hooks/exhaustive-deps
+//   // }, [user?.office]);
+// // ---- socket (singleton)
+// useEffect(() => {
+//   const onUpdated = (data) => {
+//     if (data?.to_office === user?.office) reloadRecords();
+//     else setRecords((prev) => prev.filter((r) => r.id !== data?.record_id));
+//   };
+
+//   socket.on("recordUpdated", onUpdated);
+
+//   // initial loads
+//   reloadRecords();
+//   loadOffices();
+
+//   return () => {
+//     socket.off("recordUpdated", onUpdated);
+//   };
+// }, [user?.office]);
+
+//   // ---- actions
+//   const handleView = (path) => {
+//     if (path) window.open(path, "_blank", "noopener,noreferrer");
+//   };
+
+//   const handleHistory = async (recordId) => {
+//     try {
+//       const res = await axios.get(`/api/tracking/history/${recordId}`);
+//       setHistory(res.data || []);
+//       setSelectedRecord(recordId);
+//       setShowHistory(true);
+//     } catch {
+//       alert("Failed to fetch history");
+//     }
+//   };
+
+//   const handleRelease = async (recordId, office) => {
+//     if (!office) return;
+//     const ok = window.confirm(`Release record #${recordId} to ${office}?`);
+//     if (!ok) return;
+//     try {
+//       await axios.post("/api/tracking/release", { record_id: recordId, to_office: office });
+//       setRecords((prev) => prev.filter((r) => r.id !== recordId));
+//       setNextOffice((prev) => ({ ...prev, [recordId]: "" }));
+//     } catch {
+//       alert("Failed to release record.");
+//     }
+//   };
+
+//   // ---- UI helpers
+//   const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
+//   const totalRecords = records.length;
+//   const internalCount = records.filter((r) => r.document_type === "Internal").length;
+//   const externalCount = records.filter((r) => r.document_type === "External").length;
+
+//   return (
+//     <div className="app-layout">
+//       <Sidebar />
+//       <div className="main-content">
+//         <Navbar />
+//         <div className="content-area">
+//           <h2 className="page-title">Welcome, {user?.name || "User"}</h2>
+//           <p className="subtitle">Latest records for {user?.office || "—"}.</p>
+
+//           <div className="dashboard-widgets">
+//             <div className="widget">
+//               <div className="widget-title">Total</div>
+//               <div className="widget-value">{totalRecords}</div>
+//             </div>
+//             <div className="widget">
+//               <div className="widget-title">Internal</div>
+//               <div className="widget-value">{internalCount}</div>
+//             </div>
+//             <div className="widget">
+//               <div className="widget-title">External</div>
+//               <div className="widget-value">{externalCount}</div>
+//             </div>
+//           </div>
+
+//           {loading ? (
+//             <div className="status">Loading…</div>
+//           ) : error ? (
+//             <div className="status error">{error}</div>
+//           ) : records.length === 0 ? (
+//             <div className="status">No documents assigned to your office.</div>
+//           ) : (
+//             <div className="records-table">
+//               <table>
+//                 <thead>
+//                   <tr>
+//                     <th>Control #</th>
+//                     <th>Title</th>
+//                     <th>Type</th>
+//                     <th>Destination Office</th>
+//                     <th>Created At</th>
+//                     <th>Files</th>
+//                     <th>Actions</th>
+//                   </tr>
+//                 </thead>
+//                 <tbody>
+//                   {records.map((r) => (
+//                     <tr key={r.id}>
+//                       <td>{r.control_number || "—"}</td>
+//                       <td>
+//                         <div className="title-cell">
+//                           <div className="title">{r.title || "—"}</div>
+//                           {r.description ? <div className="desc">{r.description}</div> : null}
+//                         </div>
+//                       </td>
+//                       <td>{r.document_type}</td>
+//                       <td>{r.destination_office || "—"}</td>
+//                       <td>{fmtDate(r.created_at)}</td>
+
+//                       <td>
+//                         {(r.files && r.files.length > 0 ? r.files : [{ name: "No file", path: undefined }]).map(
+//                           (f, i) => (
+//                             <div key={i} className="file-row">
+//                               <span className="file-name">
+//                                 {f.name}
+//                                 {f?.size ? (
+//                                   <span className="file-size">({Math.round((f.size || 0) / 1024)} KB)</span>
+//                                 ) : null}
+//                               </span>
+//                             </div>
+//                           )
+//                         )}
+//                       </td>
+
+//                       <td>
+//                         <div className="actions">
+//                           <button
+//                             className="btn-view"
+//                             onClick={() => handleView(r.files && r.files[0]?.path)}
+//                             title="View first file (if any)"
+//                           >
+//                             View
+//                           </button>
+
+//                           <button
+//                             className="btn-history"
+//                             onClick={() => handleHistory(r.id)}
+//                             title="Movement history"
+//                           >
+//                             History
+//                           </button>
+
+//                           <select
+//                             className="office-select"
+//                             value={nextOffice[r.id] || ""}
+//                             onChange={(e) =>
+//                               setNextOffice((prev) => ({ ...prev, [r.id]: e.target.value }))
+//                             }
+//                             title="Select next office"
+//                           >
+//                             <option value="">Select next office</option>
+//                             {offices.map((o) => (
+//                               <option key={o} value={o}>
+//                                 {o}
+//                               </option>
+//                             ))}
+//                           </select>
+
+//                           <button
+//                             className="btn-release"
+//                             disabled={!nextOffice[r.id]}
+//                             onClick={() => handleRelease(r.id, nextOffice[r.id])}
+//                             title="Release"
+//                           >
+//                             Release
+//                           </button>
+//                         </div>
+//                       </td>
+//                     </tr>
+//                   ))}
+//                 </tbody>
+//               </table>
+//             </div>
+//           )}
+
+//           {showHistory && (
+//             <div className="modal-backdrop">
+//               <div className="modal-dialog">
+//                 <div className="modal-content">
+//                   <div className="modal-header">
+//                     <div className="modal-title">Record History #{selectedRecord}</div>
+//                     <button className="btn-close-modal" onClick={() => setShowHistory(false)}>
+//                       Close
+//                     </button>
+//                   </div>
+//                   <div className="modal-body">
+//                     {history.length === 0 ? (
+//                       <div className="status">No history found.</div>
+//                     ) : (
+//                       <table className="modal-table">
+//                         <thead>
+//                           <tr>
+//                             <th>Action</th>
+//                             <th>From</th>
+//                             <th>To</th>
+//                             <th>Actor</th>
+//                             <th>Timestamp</th>
+//                           </tr>
+//                         </thead>
+//                         <tbody>
+//                           {history.map((h, idx) => (
+//                             <tr key={idx}>
+//                               <td>{h.action}</td>
+//                               <td>{h.from_office || "—"}</td>
+//                               <td>{h.to_office || "—"}</td>
+//                               <td>{h.actor_name || h.actor}</td>
+//                               <td>{new Date(h.timestamp).toLocaleString()}</td>
+//                             </tr>
+//                           ))}
+//                         </tbody>
+//                       </table>
+//                     )}
+//                   </div>
+//                 </div>
+//               </div>
+//             </div>
+//           )}
+
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
+
+
 // client/src/Components/UserDashboard.js
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import axios from "./axios";
-import { useAuth } from "../AuthContext";
-import { Link } from "react-router-dom";
-import "./PriorityBadges.css";
+import { socket } from "../socket";
+import "./Dashboard.css";
 
-function priorityClass(p) {
-  const v = String(p || "").toLowerCase();
-  if (v === "high" || v === "urgent" || v === "critical") return "prio prio-high";
-  if (v === "normal" || v === "medium" || v === "standard") return "prio prio-normal";
-  if (v === "low") return "prio prio-low";
-  return "prio prio-default";
-}
-
-export default function UserDashboard() {
-  const { user } = useAuth();
-  const [rows, setRows] = useState([]);
+export default function UserDashboard({ user }) {
+  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [limit, setLimit] = useState(5);
+  const [nextOffice, setNextOffice] = useState({});
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [offices, setOffices] = useState([]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get("/records/my-office");
-        const list = Array.isArray(res.data) ? res.data : [];
-        setRows(list);
-      } catch (e) {
-        console.error(e);
-        setError("Failed to load recent records");
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
+  // QR modal state
+  const [showQR, setShowQR] = useState(false);
+  const [qrData, setQrData] = useState({ control_number: "", url: "" });
 
-  const records = useMemo(() => {
-    const map = new Map();
-    for (const r of rows) {
-      const recId =
-        (r && r.id) ||
-        (r && r.record_id) ||
-        (r && r._id) ||
-        (r && r.control_number) ||
-        Math.random().toString(36).slice(2);
+  const API_BASE =
+    process.env.REACT_APP_API_BASE?.replace(/\/$/, "") || "http://localhost:8081";
 
-      if (!map.has(recId)) {
-        map.set(recId, {
-          id: recId,
-          control_number: (r && r.control_number) || "",
-          title: (r && r.title) || "",
-          classification: (r && r.classification) || "",
-          priority: (r && r.priority) || "",
-          destination_office: (r && r.destination_office) || "",
-          created_at: (r && r.created_at) || null,
-          files: [],
-        });
-      }
+  // helpers
+  const normalizeQrPath = (p) => {
+    if (!p) return "";
+    return p.startsWith("/uploads/") ? p : `/uploads/${p.replace(/^\/+/, "")}`;
+  };
 
-      if (r && r.file_name) {
-        map.get(recId).files.push({
-          name: r.file_name,
-          type: r.file_type,
-          size: r.file_size,
-          path: r.file_path,
-          retention_period: r.retention_period,
-        });
-      }
-    }
-
-    const arr = Array.from(map.values()).sort((a, b) => {
-      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return bTime - aTime;
-    });
-
-    return arr;
-  }, [rows]);
-
-  const recent = useMemo(() => records.slice(0, Number(limit) || 5), [records, limit]);
-
-  const apiBase = axios.defaults?.baseURL || "";
-
-  const fmtDate = (d) => {
-    if (!d) return "—";
+  // ---- data loaders
+  const reloadRecords = async () => {
     try {
-      return new Date(d).toLocaleString();
-    } catch {
-      return String(d);
+      setLoading(true);
+      const res = await axios.get("/records/my-office");
+      const rows = Array.isArray(res.data) ? res.data : [];
+
+      // group rows -> records with files[]
+      const map = new Map();
+      for (const r of rows) {
+        const api_id = r?.id ?? r?.record_id ?? null;
+        const recId = api_id || r?.control_number || Math.random().toString(36).slice(2);
+        if (!map.has(recId)) {
+          map.set(recId, {
+            id: recId,
+            api_id,
+            control_number: r?.control_number || "",
+            title: r?.title || "Untitled",
+            classification: r?.classification || "",
+            priority: r?.priority || "Normal",
+            destination_office: r?.destination_office || "",
+            document_type: r?.document_type || "Internal",
+            created_at: r?.created_at || null,
+            description: r?.description || "",
+            qrcode_path: r?.qrcode_path || "",     // <-- include QR from API
+            files: [],
+          });
+        }
+        if (r?.file_path) {
+          map.get(recId).files.push({
+            name: r.file_name || (r.file_path ? r.file_path.split("/").pop() : ""),
+            type: r.file_type,
+            size: r.file_size,
+            path: r.file_path,
+            retention_period: r.retention_period,
+          });
+        }
+      }
+      const grouped = Array.from(map.values()).sort((a, b) => {
+        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return bt - at;
+      });
+      setRecords(grouped);
+      setError(null);
+    } catch (e) {
+      console.error(e);
+      setError("Failed to load records");
+    } finally {
+      setLoading(false);
     }
   };
 
+  const loadOffices = async () => {
+    try {
+      const res = await axios.get("/offices");
+      const raw = Array.isArray(res.data) ? res.data : [];
+      const names = raw.map((x) => (typeof x === "string" ? x : x?.name)).filter(Boolean);
+      const unique = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+      setOffices(unique);
+    } catch (e) {
+      console.error("Failed to load offices", e);
+      setOffices([]);
+    }
+  };
+
+  // ---- socket (singleton)
+  useEffect(() => {
+    const onUpdated = (data) => {
+      if (data?.to_office === user?.office) reloadRecords();
+      else setRecords((prev) => prev.filter((r) => r.id !== data?.record_id));
+    };
+
+    socket.on("recordUpdated", onUpdated);
+    reloadRecords();
+    loadOffices();
+
+    return () => {
+      socket.off("recordUpdated", onUpdated);
+    };
+  }, [user?.office]);
+
+  // ---- actions
+  // View now prefers the QR code; if not available, opens the first file (if any)
+  const handleView = (record) => {
+    const p = normalizeQrPath(record.qrcode_path);
+    if (p) {
+      setQrData({
+        control_number: record.control_number,
+        url: `${API_BASE}${p}`,
+      });
+      setShowQR(true);
+      return;
+    }
+    const firstPath = record.files && record.files[0]?.path;
+    if (firstPath) {
+      window.open(firstPath, "_blank", "noopener,noreferrer");
+    } else {
+      alert("No QR code or file to view.");
+    }
+  };
+
+  const handleHistory = async (recordId) => {
+    try {
+      const res = await axios.get(`/api/tracking/history/${recordId}`);
+      setHistory(res.data || []);
+      setSelectedRecord(recordId);
+      setShowHistory(true);
+    } catch {
+      alert("Failed to fetch history");
+    }
+  };
+
+  const handleRelease = async (recordId, office) => {
+    if (!office) return;
+    const ok = window.confirm(`Release record #${recordId} to ${office}?`);
+    if (!ok) return;
+    try {
+      await axios.post("/api/tracking/release", { record_id: recordId, to_office: office });
+      setRecords((prev) => prev.filter((r) => r.id !== recordId));
+      setNextOffice((prev) => ({ ...prev, [recordId]: "" }));
+    } catch {
+      alert("Failed to release record.");
+    }
+  };
+
+  // ---- UI helpers
+  const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
+  const totalRecords = records.length;
+  const internalCount = records.filter((r) => r.document_type === "Internal").length;
+  const externalCount = records.filter((r) => r.document_type === "External").length;
+
   return (
-    <div className="d-flex">
+    <div className="app-layout">
       <Sidebar />
-      <div className="flex-grow-1">
+      <div className="main-content">
         <Navbar />
-        <div className="container p-3">
-          <div className="d-flex align-items-center justify-content-between mb-2">
-            <h2 className="mb-0">
-              Welcome{user && user.name ? `, ${user.name}` : ""}!
-            </h2>
-            <div className="d-flex align-items-center gap-2">
-              <label className="form-label mb-0">Show</label>
-              <select
-                className="form-select form-select-sm"
-                style={{ width: 90 }}
-                value={limit}
-                onChange={(e) => setLimit(e.target.value)}
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-              </select>
+        <div className="content-area">
+          <h2 className="page-title">Welcome, {user?.name || "User"}</h2>
+          <p className="subtitle">Latest records for {user?.office || "—"}.</p>
+
+          <div className="dashboard-widgets">
+            <div className="widget">
+              <div className="widget-title">Total</div>
+              <div className="widget-value">{totalRecords}</div>
+            </div>
+            <div className="widget">
+              <div className="widget-title">Internal</div>
+              <div className="widget-value">{internalCount}</div>
+            </div>
+            <div className="widget">
+              <div className="widget-title">External</div>
+              <div className="widget-value">{externalCount}</div>
             </div>
           </div>
 
-          <p className="text-muted">
-            Latest records for{" "}
-            <strong>
-              {(user && user.office) ||
-                localStorage.getItem("userOffice") ||
-                "your office"}
-            </strong>
-            .
-          </p>
-
-          {error && <div className="alert alert-danger">{error}</div>}
-
           {loading ? (
-            <div>Loading recent records…</div>
-          ) : recent.length === 0 ? (
-            <div className="alert alert-info">
-              No records found for your office yet.
-            </div>
+            <div className="status">Loading…</div>
+          ) : error ? (
+            <div className="status error">{error}</div>
+          ) : records.length === 0 ? (
+            <div className="status">No documents assigned to your office.</div>
           ) : (
-            <div className="row g-3">
-              {recent.map((r) => (
-                <div className="col-12" key={r.id}>
-                  <div className="card shadow-sm">
-                    <div className="card-body">
-                      <div className="d-flex justify-content-between align-items-start">
-                        <div>
-                          <h5 className="card-title mb-1">
-                            {r.title || "(Untitled Record)"}
-                          </h5>
-                          <div className="text-muted small">
-                            <span className="me-3">
-                              <strong>Control #:</strong> {r.control_number || "—"}
-                            </span>
-                            <span className="me-3">
-                              <strong>Classification:</strong>{" "}
-                              {r.classification || "—"}
-                            </span>
-                            <span className="me-3">
-                              <span className={priorityClass(r.priority)}>
-  {r.priority && String(r.priority).trim() ? r.priority : "Normal"}
-</span>
-                            </span>
-                            <span className="me-3">
-                              <strong>Created:</strong> {fmtDate(r.created_at)}
-                            </span>
-                          </div>
+            <div className="records-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Control #</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Destination Office</th>
+                    <th>Created At</th>
+                    <th>Files</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.control_number || "—"}</td>
+                      <td>
+                        <div className="title-cell">
+                          <div className="title">{r.title || "—"}</div>
+                          {r.description ? <div className="desc">{r.description}</div> : null}
                         </div>
-                        <span className="badge bg-secondary">
-                          {r.destination_office || "—"}
-                        </span>
-                      </div>
+                      </td>
+                      <td>{r.document_type}</td>
+                      <td>{r.destination_office || "—"}</td>
+                      <td>{fmtDate(r.created_at)}</td>
+                      <td>
+                        {(r.files && r.files.length > 0 ? r.files : [{ name: "No file", path: undefined }]).map(
+                          (f, i) => (
+                            <div key={i} className="file-row">
+                              <span className="file-name">
+                                {f.name}
+                                {f?.size ? (
+                                  <span className="file-size">({Math.round((f.size || 0) / 1024)} KB)</span>
+                                ) : null}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </td>
+                      <td>
+                        <div className="actions">
+                          <button
+                            className="btn-view"
+                            onClick={() => handleView(r)}  // <-- now shows QR first
+                            title="View QR / first file"
+                          >
+                            View
+                          </button>
 
-                      {/* Attachments */}
-{r.files && r.files.length > 0 && (
-  <div className="mt-3">
-    <div className="fw-semibold mb-1">Attachments</div>
-    <ul className="mb-0">
-      {r.files.map((f, i) => {
-        if (!f || !f.path) return null;
-        const to = `/view?file=${encodeURIComponent(f.path)}${
-          f.name ? `&name=${encodeURIComponent(f.name)}` : ""
-        }`;
-        return (
-          <li key={i} className="small">
-            <a href={to}> {/* Using <a> keeps it simple; React Router will still handle /view */}
-              {f.name || f.path}
-            </a>
-            {f.size ? (
-              <span className="text-muted ms-2">
-                ({Math.round(f.size / 1024)} KB)
-              </span>
-            ) : null}
-          </li>
-        );
-      })}
-    </ul>
-  </div>
-)}
+                          <button
+                            className="btn-history"
+                            onClick={() => handleHistory(r.id)}
+                            title="Movement history"
+                          >
+                            History
+                          </button>
 
-                    </div>
-                  </div>
-                </div>
-              ))}
+                          <select
+                            className="office-select"
+                            value={nextOffice[r.id] || ""}
+                            onChange={(e) =>
+                              setNextOffice((prev) => ({ ...prev, [r.id]: e.target.value }))
+                            }
+                            title="Select next office"
+                          >
+                            <option value="">Select next office</option>
+                            {offices.map((o) => (
+                              <option key={o} value={o}>
+                                {o}
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            className="btn-release"
+                            disabled={!nextOffice[r.id]}
+                            onClick={() => handleRelease(r.id, nextOffice[r.id])}
+                            title="Release"
+                          >
+                            Release
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
-          <div className="mt-3">
-            <Link to="/all" className="btn btn-outline-primary">
-              View all records
-            </Link>
-          </div>
+          {/* QR Modal */}
+          {showQR && (
+            <div
+              className="modal-backdrop"
+              onClick={() => setShowQR(false)}
+              style={{ background: "rgba(0,0,0,0.4)" }}
+            >
+              <div
+                className="modal-dialog"
+                onClick={(e) => e.stopPropagation()}
+                style={{ maxWidth: 320 }}
+              >
+                <div className="modal-content" style={{ textAlign: "center", padding: 16 }}>
+                  <div className="modal-title" style={{ marginBottom: 8 }}>
+                    QR Code for {qrData.control_number}
+                  </div>
+                  <img
+                    src={qrData.url}
+                    alt={`QR Code for ${qrData.control_number}`}
+                    style={{ width: 200, height: 200 }}
+                  />
+                  <div style={{ marginTop: 12 }}>
+                    <button className="btn-close-modal" onClick={() => setShowQR(false)}>
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showHistory && (
+            <div className="modal-backdrop">
+              <div className="modal-dialog">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <div className="modal-title">Record History #{selectedRecord}</div>
+                    <button className="btn-close-modal" onClick={() => setShowHistory(false)}>
+                      Close
+                    </button>
+                  </div>
+                  <div className="modal-body">
+                    {history.length === 0 ? (
+                      <div className="status">No history found.</div>
+                    ) : (
+                      <table className="modal-table">
+                        <thead>
+                          <tr>
+                            <th>Action</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Actor</th>
+                            <th>Timestamp</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {history.map((h, idx) => (
+                            <tr key={idx}>
+                              <td>{h.action}</td>
+                              <td>{h.from_office || "—"}</td>
+                              <td>{h.to_office || "—"}</td>
+                              <td>{h.actor_name || h.actor}</td>
+                              <td>{new Date(h.timestamp).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>

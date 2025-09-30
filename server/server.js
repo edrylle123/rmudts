@@ -1,32 +1,55 @@
 // server.js
 require("dotenv").config();
-
+const http = require("http");
+const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
 const express = require("express");
 const cors = require("cors");
 const mysql = require("mysql2");
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-const { execFile } = require("child_process");
-const sharp = require("sharp"); // used for some conversions
+// const upload = multer({
+//   dest: 'uploads/',
+//   limits: { fileSize: 10 * 1024 * 1024 } // Set max file size to 10MB
+// });
 
-// Optional: lightweight image->PDF via pdf-lib (better sizing on images)
+
+// const qrcodePath = `/uploads/${qrFileName}`;
+
+const { execFile } = require("child_process");
+const sharp = require("sharp");
+
 const { PDFDocument } = require("pdf-lib");
 
 const app = express();
-
+const QRCode = require("qrcode");
+const path = require("path");
+const fs = require("fs");
 // ====== Core middleware ======
 app.use(cors());
 app.use(express.json());
+const uploadDir = path.join(__dirname, "uploads");
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// Multer file storage configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir), // Store files in 'uploads' directory
+  filename: (req, file, cb) => {
+    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, unique + "-" + file.originalname); // Unique filenames to avoid conflicts
+  },
+});
 
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // Max file size 10MB
+});
 // ====== JWT Secrets ======
 const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret_change_me";
 const REFRESH_TOKEN_SECRET =
   process.env.REFRESH_TOKEN_SECRET || "dev_refresh_secret_change_me";
 
-// ====== Database Connection ======
+// ====== DB ======
 const db = mysql.createConnection({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
@@ -34,30 +57,45 @@ const db = mysql.createConnection({
   database: process.env.DB_NAME || "records_db",
 });
 
-// ====== Uploads folder & static serving ======
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-app.use("/uploads", express.static(uploadDir));
+// ====== Uploads ======
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, unique + "-" + file.originalname);
-  },
+
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+
+
+
+
+// ====== HTTP + Socket.IO ======
+// const server = http.createServer(app);
+// const io = new Server(server, {
+//   cors: { origin: "http://localhost:3000", methods: ["GET", "POST"] },
+// });
+// app.set("io", new Server(http.createServer(app), {
+//   cors: { origin: "http://localhost:3000", methods: ["GET", "POST"] },
+// }));
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "http://localhost:3000", methods: ["GET", "POST"] },
 });
-const upload = multer({ storage });
+app.set("io", io); // optional if other modules read it
+
+io.on("connection", (socket) => {
+  console.log("⚡ Socket connected:", socket.id);
+  socket.on("disconnect", () => {
+    console.log("❌ Socket disconnected:", socket.id);
+  });
+});
 
 // ====== Auth helpers ======
 function verifyToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   if (!authHeader) return res.status(401).json({ message: "No token provided" });
-
   const parts = authHeader.split(" ");
   if (parts.length !== 2 || parts[0] !== "Bearer")
     return res.status(401).json({ message: "Bad authorization header" });
-
   const token = parts[1];
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) return res.status(403).json({ message: "Invalid token" });
@@ -65,7 +103,6 @@ function verifyToken(req, res, next) {
     next();
   });
 }
-
 function verifyAdmin(req, res, next) {
   if (!req.user || req.user.role !== "admin") {
     return res.status(403).json({ message: "Admins only" });
@@ -73,71 +110,46 @@ function verifyAdmin(req, res, next) {
   next();
 }
 
-// ====== File conversion helpers (optional) ======
+// ====== Converters ======
 const OFFICE_EXTS = [
   ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
   ".odt", ".ods", ".odp", ".rtf", ".txt",
 ];
-
-// Try to find LibreOffice binary (especially on Windows)
 function findSoffice() {
   if (process.platform === "win32") {
     const candidates = [
       "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
       "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe",
     ];
-    for (const p of candidates) {
-      if (fs.existsSync(p)) return p;
-    }
+    for (const p of candidates) if (fs.existsSync(p)) return p;
   }
-  return "soffice"; // rely on PATH (Linux/Mac)
+  return "soffice";
 }
-
-/**
- * Convert Office doc to PDF via LibreOffice, returns output PDF path or null.
- */
 function convertOfficeToPdf(inputAbs, outDir) {
   return new Promise((resolve) => {
     const soffice = findSoffice();
-    const args = [
-      "--headless",
-      "--convert-to",
-      "pdf",
-      "--outdir",
-      outDir,
-      inputAbs,
-    ];
+    const args = ["--headless", "--convert-to", "pdf", "--outdir", outDir, inputAbs];
     execFile(soffice, args, { windowsHide: true }, (err) => {
       if (err) return resolve(null);
       const basename = path.basename(inputAbs, path.extname(inputAbs)) + ".pdf";
       const outAbs = path.join(outDir, basename);
-      if (fs.existsSync(outAbs)) return resolve(outAbs);
-      resolve(null);
+      resolve(fs.existsSync(outAbs) ? outAbs : null);
     });
   });
 }
-
-/**
- * Convert single image (jpg/png/gif/webp/tif/...) to PDF using pdf-lib for exact sizing.
- * Returns outPath or null.
- */
 async function convertImageToPdf(inputPath, outPath) {
   try {
     const ext = path.extname(inputPath).toLowerCase();
     const bytes = fs.readFileSync(inputPath);
     const pdfDoc = await PDFDocument.create();
-
     if (ext === ".jpg" || ext === ".jpeg") {
       const img = await pdfDoc.embedJpg(bytes);
       const { width, height } = img;
       const page = pdfDoc.addPage([width, height]);
       page.drawImage(img, { x: 0, y: 0, width, height });
     } else {
-      // Use PNG route (works for png and also for others after sharp -> png)
       let pngBytes = bytes;
-      if (ext !== ".png") {
-        pngBytes = await sharp(bytes).png().toBuffer();
-      }
+      if (ext !== ".png") pngBytes = await sharp(bytes).png().toBuffer();
       const img = await pdfDoc.embedPng(pngBytes);
       const { width, height } = img;
       const page = pdfDoc.addPage([width, height]);
@@ -151,18 +163,11 @@ async function convertImageToPdf(inputPath, outPath) {
     return null;
   }
 }
-
-/**
- * If uploaded file is not PDF, try to convert it to PDF.
- * Returns { name, type, size, pdfPath } or null if not converted / unsupported.
- */
 async function convertToPdfIfNeeded(file) {
   try {
     const inputAbs = path.join(uploadDir, file.filename);
     const ext = path.extname(file.originalname || file.filename).toLowerCase();
     const mime = file.mimetype || "";
-
-    // Already PDF
     if (mime.includes("pdf") || ext === ".pdf") return null;
 
     const targetAbs = path.join(
@@ -170,7 +175,6 @@ async function convertToPdfIfNeeded(file) {
       path.basename(file.filename, path.extname(file.filename)) + ".pdf"
     );
 
-    // Images -> PDF
     if (
       mime.startsWith("image/") ||
       [".jpg",".jpeg",".png",".gif",".webp",".tif",".tiff",".jxl",".jp2",".j2k",".jpx"].includes(ext)
@@ -186,7 +190,6 @@ async function convertToPdfIfNeeded(file) {
       };
     }
 
-    // Office docs -> PDF via LibreOffice
     if (OFFICE_EXTS.includes(ext)) {
       const out = await convertOfficeToPdf(inputAbs, uploadDir);
       if (!out) return null;
@@ -217,14 +220,12 @@ app.post("/signup", async (req, res) => {
       message: "All fields including role and office are required",
     });
   }
-
   try {
     db.query("SELECT id FROM users WHERE email = ?", [email], async (err, rows) => {
       if (err) return res.status(500).json({ success: false, message: err.message });
       if (rows.length > 0) {
         return res.status(409).json({ success: false, message: "Email already registered" });
       }
-
       const hashedPassword = await bcrypt.hash(password, 10);
       const sql =
         "INSERT INTO users (name, email, password, role, idnumber, office) VALUES (?, ?, ?, ?, ?, ?)";
@@ -253,13 +254,11 @@ app.post("/signup", async (req, res) => {
 app.post("/login", (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ message: "Email and password required" });
-
   db.query("SELECT * FROM users WHERE email = ?", [email], async (err, rows) => {
     if (err) return res.status(500).json({ message: err.message });
     if (!rows || rows.length === 0) {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
-
     const user = rows[0];
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ success: false, message: "Invalid email or password" });
@@ -269,7 +268,6 @@ app.post("/login", (req, res) => {
       JWT_SECRET,
       { expiresIn: "1h" }
     );
-
     const refreshToken = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name, office: user.office },
       REFRESH_TOKEN_SECRET,
@@ -291,16 +289,13 @@ app.post("/login", (req, res) => {
 app.post("/refresh-token", (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) return res.status(400).json({ error: "refreshToken required" });
-
   jwt.verify(refreshToken, REFRESH_TOKEN_SECRET, (err, decoded) => {
     if (err) return res.status(403).json({ error: "Invalid or expired refresh token" });
-
     const newToken = jwt.sign(
       { id: decoded.id, email: decoded.email, role: decoded.role, name: decoded.name, office: decoded.office },
       JWT_SECRET,
       { expiresIn: "1h" }
     );
-
     return res.json({
       token: newToken,
       user: { id: decoded.id, email: decoded.email, role: decoded.role, name: decoded.name, office: decoded.office },
@@ -308,22 +303,19 @@ app.post("/refresh-token", (req, res) => {
   });
 });
 
-// ====== USERS API (Admin only) ======
+// ====== USERS API ======
 app.get("/users", verifyToken, verifyAdmin, (req, res) => {
   db.query("SELECT id, name, email, role, idnumber, office FROM users", (err, rows) => {
     if (err) return res.status(500).json({ message: err.message });
     return res.json(rows);
   });
 });
-
 app.put("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
   const { id } = req.params;
   const { name, email, role, password, idnumber, office } = req.body || {};
-
   if (!name || !email || !role) {
     return res.status(400).json({ message: "name, email and role are required" });
   }
-
   try {
     let sql, values;
     if (password && password.trim() !== "") {
@@ -336,7 +328,6 @@ app.put("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
         "UPDATE users SET name = ?, email = ?, role = ?, idnumber = ?, office = ? WHERE id = ?";
       values = [name, email, role, idnumber || "", office || "", id];
     }
-
     db.query(sql, values, (err) => {
       if (err) return res.status(500).json({ message: err.message });
       return res.json({ success: true, message: "User updated successfully" });
@@ -345,7 +336,6 @@ app.put("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 });
-
 app.delete("/users/:id", verifyToken, verifyAdmin, (req, res) => {
   const { id } = req.params;
   db.query("DELETE FROM users WHERE id = ?", [id], (err) => {
@@ -354,7 +344,7 @@ app.delete("/users/:id", verifyToken, verifyAdmin, (req, res) => {
   });
 });
 
-// ====== OFFICES DIRECTORY (for filters, etc.) ======
+// ====== OFFICES ======
 const STATIC_OFFICES = [
   "Office of the President",
   "VP Admin and Finance",
@@ -382,7 +372,6 @@ const STATIC_OFFICES = [
   "Procurement Office",
   "Human Resource Management Office",
 ];
-
 app.get("/offices", verifyToken, (req, res) => {
   const sql = `
     SELECT DISTINCT office
@@ -394,14 +383,19 @@ app.get("/offices", verifyToken, (req, res) => {
     const names = new Set();
     if (!err && Array.isArray(rows)) rows.forEach((r) => r && r.office && names.add(String(r.office)));
     STATIC_OFFICES.forEach((n) => names.add(n));
-    const result = Array.from(names).sort((a, b) => a.localeCompare(b)).map((name, idx) => ({ id: idx + 1, name }));
-    res.json(result);
+    res.json(Array.from(names).sort((a, b) => a.localeCompare(b)));
+  });
+});
+app.get("/records", verifyToken, (req, res) => {
+  db.query("SELECT id, control_number, qrcode_path FROM records", (err, rows) => {
+    if (err) return res.status(500).json({ message: err.message });
+    res.json(rows);
   });
 });
 
-// ====== RECORDS API ======
 
-// Utility: generate next control number (preview)
+// ====== RECORDS ======
+// Control number generator
 function getNextControlNumber(callback) {
   const sql = `
     SELECT control_number 
@@ -412,7 +406,6 @@ function getNextControlNumber(callback) {
   `;
   db.query(sql, (err, result) => {
     if (err) return callback(err);
-
     let nextNumber;
     if (result.length > 0) {
       const lastControl = result[0].control_number; // e.g. 250917-012
@@ -427,128 +420,247 @@ function getNextControlNumber(callback) {
     callback(null, nextNumber);
   });
 }
-
 app.get("/records/next-control-number", (req, res) => {
   getNextControlNumber((err, nextNum) => {
     if (err) return res.status(500).json({ error: "Database error" });
     res.json({ control_number: nextNum });
   });
 });
-
 function normalizeOrigin(str) {
   return String(str || "internal").toLowerCase() === "external" ? "external" : "internal";
 }
 
-// Create record (accept user control_number if provided; else auto)
+// ====== POST route to create record ======
+// app.post("/records", upload.array("files"), async (req, res) => {
+//   try {
+//     const { control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin } = req.body;
+//     const files = req.files || [];
+
+//     // Check if required fields are missing
+//     if (!control_number || !title || !classification || !priority || !description || !source || !retention_period || !destination_office) {
+//       return res.status(400).json({ error: "All fields are required." });
+//     }
+
+//     // Process files if present
+//     const filePaths = files.map(file => `/uploads/${file.filename}`);
+
+//     // Database query for inserting the record
+//     const sql = `
+//       INSERT INTO records (control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin)
+//       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+//     `;
+//     const recordResult = await new Promise((resolve, reject) => {
+//       db.query(sql, [control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin], (err, result) => {
+//         if (err) {
+//           console.error("Database error:", err);
+//           return reject({ error: "Failed to insert record into database." });
+//         }
+//         resolve(result);
+//       });
+//     });
+
+//     // Generate QR code
+//     const qrFilePath = `/uploads/qr-${control_number}.png`;  // Dynamically generate the full QR path
+// const updateQrPathSql = `
+//   UPDATE records SET qrcode_path = ? WHERE id = ?
+// `;
+// db.query(updateQrPathSql, [qrFilePath, recordResult.insertId], (updateErr) => {
+//   if (updateErr) {
+//     console.error("Failed to update QR code path:", updateErr);
+//   } else {
+//     console.log("QR code path updated in DB:", qrFilePath);  // Log the update
+//   }
+// });
+
+
+
+//     res.status(201).json({ message: "Record created successfully", control_number, recordId: recordResult.insertId });
+//   } catch (error) {
+//     console.error("Error during record creation:", error);
+//     res.status(500).json({ error: error.message || "Failed to create record. Please try again later." });
+//   }
+// });
+
+// Route to create a new record
+// app.post("/records", upload.array("files"), async (req, res) => {
+//   try {
+//     const { control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin } = req.body;
+//     const files = req.files || [];
+
+//     // Check if required fields are missing
+//     if (!control_number || !title || !classification || !priority || !description || !source || !retention_period || !destination_office) {
+//       return res.status(400).json({ error: "All fields are required." });
+//     }
+
+//     // Process files if present
+//     const filePaths = files.map(file => `/uploads/${file.filename}`);
+
+//     // Database query for inserting the record
+//     const sql = `
+//       INSERT INTO records (control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin)
+//       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+//     `;
+//     const recordResult = await new Promise((resolve, reject) => {
+//       db.query(sql, [control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin], (err, result) => {
+//         if (err) {
+//           console.error("Database error:", err);
+//           return reject({ error: "Failed to insert record into database." });
+//         }
+//         resolve(result);
+//       });
+//     });
+
+//     // Generate QR code for the record
+//     const qrFilePath = await generateQRCode(control_number);  // Get the generated QR code file name
+//     if (!qrFilePath) {
+//       return res.status(500).json({ error: "Failed to generate QR code" });
+//     }
+
+//     // Save the QR code path in the database
+//     const updateQrPathSql = `
+//       UPDATE records SET qrcode_path = ? WHERE id = ?
+//     `;
+//     db.query(updateQrPathSql, [qrFilePath, recordResult.insertId], (updateErr) => {
+//       if (updateErr) {
+//         console.error("Failed to update QR code path:", updateErr);
+//       } else {
+//         console.log("QR code path updated in DB:", qrFilePath);  // Log the update
+//       }
+//     });
+
+//     res.status(201).json({ message: "Record created successfully", control_number, recordId: recordResult.insertId });
+//   } catch (error) {
+//     console.error("Error during record creation:", error);
+//     res.status(500).json({ error: error.message || "Failed to create record. Please try again later." });
+//   }
+// });
+
 app.post("/records", upload.array("files"), async (req, res) => {
-  const {
-    control_number, // optional user input
-    title,
-    classification,
-    priority,
-    description,
-    source,
-    retention_period,
-    destination_office,
-    record_origin, // "Internal" | "External"
-  } = req.body;
-  const files = req.files || [];
-  const origin = normalizeOrigin(record_origin);
+  try {
+    const { control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin } = req.body;
 
-  // Helper to insert and then attach files
-  const actuallyInsert = (cn) => {
-    const sql = `
+    if (!control_number || !title || !classification || !priority || !description || !source || !retention_period || !destination_office) {
+      return res.status(400).json({ error: "All fields are required." });
+    }
+
+    const insertSql = `
       INSERT INTO records
-      (title, classification, priority, description, source, retention_period, created_at, control_number, destination_office, record_origin)
-      VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)
+      (control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    db.query(
-      sql,
-      [title, classification, priority, description, source, retention_period, cn, destination_office, origin],
-      async (err, result) => {
-        if (err) {
-          if (err.code === "ER_DUP_ENTRY") {
-            return res.status(409).json({ error: "Control number already exists" });
-          }
-          return res.status(500).json({ error: "Database insert error" });
-        }
 
-        const recordId = result.insertId;
+    const recordResult = await new Promise((resolve, reject) => {
+      db.query(
+        insertSql,
+        [control_number, title, classification, priority, description, source, retention_period, destination_office, record_origin || "internal"],
+        (err, result) => (err ? reject(err) : resolve(result))
+      );
+    });
 
-        // Optional: Try to convert non-PDFs to PDF and insert both or just original?
-        // Here we only save the original upload metadata (as before). If you want to also save converted PDFs, do another insert.
-        if (files.length > 0) {
-          // Optionally convert to PDF and insert too
-          const values = [];
-          for (const file of files) {
-            values.push([
-              recordId,
-              file.originalname,
-              file.mimetype,
-              file.size,
-              "/uploads/" + file.filename,
-              retention_period,
-              new Date(),
-            ]);
+    // generate QR and update path
+    const qrFileName = await generateQRCode(control_number); // e.g., "qr-003.png"
+    const qrPath = qrFileName ? `/uploads/${qrFileName}` : null;
 
-            // Try conversion (best-effort). If success, also store PDF as a second row.
-            try {
-              const pdfInfo = await convertToPdfIfNeeded(file);
-              if (pdfInfo) {
-                values.push([
-                  recordId,
-                  pdfInfo.name,
-                  pdfInfo.type,
-                  pdfInfo.size,
-                  pdfInfo.pdfPath,
-                  retention_period,
-                  new Date(),
-                ]);
-              }
-            } catch {}
-          }
+    if (qrPath) {
+      await new Promise((resolve, reject) => {
+        db.query("UPDATE records SET qrcode_path = ? WHERE id = ?", [qrPath, recordResult.insertId], (err) =>
+          err ? reject(err) : resolve()
+        );
+      });
+    }
 
-          const fileSql = `
-            INSERT INTO record_files (record_id, file_name, file_type, file_size, file_path, retention_period, uploaded_at)
-            VALUES ?
-          `;
-          db.query(fileSql, [values], (fileErr) => {
-            if (fileErr) return res.status(500).json({ error: "File insert error" });
+    // optional: emit socket update if you use io
+    if (io) io.emit("recordsUpdated");
 
-            res.json({
-              message: "✅ Record and files saved successfully",
-              recordId,
-              control_number: cn,
-              destination_office,
-              record_origin: origin,
-              files: values,
-            });
-          });
-        } else {
-          res.json({
-            message: "✅ Record saved (no files uploaded)",
-            recordId,
-            control_number: cn,
-            destination_office,
-            record_origin: origin,
-          });
-        }
-      }
-    );
-  };
-
-  if (control_number && String(control_number).trim() !== "") {
-    // Use user-supplied control number
-    return actuallyInsert(String(control_number).trim());
+    res.status(201).json({
+      message: "Record created successfully",
+      control_number,
+      recordId: recordResult.insertId,
+      qrcode_path: qrPath,
+    });
+  } catch (error) {
+    console.error("Create record failed:", error);
+    res.status(500).json({ error: "Failed to create record." });
   }
-
-  // Else auto-generate
-  getNextControlNumber((err, nextNum) => {
-    if (err) return res.status(500).json({ error: "Error generating control number" });
-    actuallyInsert(nextNum);
-  });
 });
 
+// ====== QR Code generation function ======
+// async function generateQRCode(control_number, title) {
+//   const qrData = JSON.stringify({ title, control_number });
+//   const qrFileName = `qr-${control_number}.png`; // QR code file name
+//   const qrAbsPath = path.join(uploadDir, qrFileName); // Path to save the file
+//   try {
+//     await QRCode.toFile(qrAbsPath, qrData, { width: 512, margin: 1 });
+//     return qrFileName; // Return the file name of the generated QR code
+//   } catch (err) {
+//     console.error("QR Code generation failed:", err);
+//     return null;
+//   }
+// }
+
+
+
+// QR Code generation function
+// async function generateQRCode(control_number) {
+//   const qrFileName = `qr-${control_number}.png`; // QR code file name
+//   const qrData = JSON.stringify({ control_number, title: `QR Code for ${control_number}` });
+//   const qrAbsPath = path.join(uploadDir, qrFileName); // Path to save the file
+  
+//   try {
+//     // Generate the QR code and save it as a PNG file
+//     await QRCode.toFile(qrAbsPath, qrData, { width: 512, margin: 1 });
+//     return qrFileName;  // Return the file name to be stored in the database
+//   } catch (err) {
+//     console.error("QR Code generation failed:", err);
+//     return null;  // Return null if the QR code generation failed
+//   }
+// }
+
+// --- QR code generation ---
+// Add QR code generation after record insertion
+// async function generateQRCode(control_number) {
+//   const qrFileName = `qr-${control_number}.png`;  // QR code file name
+//   const qrData = JSON.stringify({ control_number, title: `QR Code for ${control_number}` });
+//   const qrAbsPath = path.join(uploadDir, qrFileName); // Path to save the file
+  
+//   try {
+//     await QRCode.toFile(qrAbsPath, qrData, { width: 512, margin: 1 });
+//     console.log("QR code saved at:", qrAbsPath);  // Log the file path
+//     return qrFileName;  // Return the file name
+//   } catch (err) {
+//     console.error("QR Code generation failed:", err);
+//     return null;
+//   }
+// }
+// QR Code Generation function
+async function generateQRCode(control_number) {
+  const qrFileName = `qr-${control_number}.png`;  // QR code file name
+  const qrData = JSON.stringify({ control_number, title: `QR Code for ${control_number}` });
+  const qrAbsPath = path.join(uploadDir, qrFileName); // Path to save the file
+
+  try {
+    // Generate and save the QR code to the uploads directory
+    await QRCode.toFile(qrAbsPath, qrData, { width: 512, margin: 1 });
+    console.log("QR code saved at:", qrAbsPath);  // Log the file path
+    return qrFileName;  // Return the file name to store in the database
+  } catch (err) {
+    console.error("QR Code generation failed:", err);
+    return null;
+  }
+}
+
+// const updateQrPathSql = `
+//     UPDATE records SET qrcode_path = ? WHERE control_number = ?
+//   `;
+//   await new Promise((resolve, reject) => {
+//   db.query(updateQrPathSql, [qrFilePath, recordResult.insertId], (updateErr) => {
+//     if (updateErr) {
+//       console.error("Failed to update QR code path:", updateErr);
+//       return reject("Failed to update QR code path");
+//     }
+//     resolve();
+//   });
+// });
 // Records visible to current user (admin = all; user = office only)
 app.get("/records/my-office", verifyToken, (req, res) => {
   let sql, params;
@@ -570,14 +682,13 @@ app.get("/records/my-office", verifyToken, (req, res) => {
     `;
     params = [req.user.office];
   }
-
   db.query(sql, params, (err, rows) => {
     if (err) return res.status(500).json({ error: "Database error" });
     res.json(rows);
   });
 });
 
-// ====== New: GET one record by numeric id ======
+// GET one record by numeric id
 app.get("/records/:id", verifyToken, (req, res) => {
   const { id } = req.params;
   const sql = `
@@ -619,7 +730,7 @@ app.get("/records/:id", verifyToken, (req, res) => {
   });
 });
 
-// ====== New: GET one record by control number ======
+// GET one record by control number
 app.get("/records/by-control/:cn", verifyToken, (req, res) => {
   const { cn } = req.params;
   const sql = `
@@ -661,7 +772,7 @@ app.get("/records/by-control/:cn", verifyToken, (req, res) => {
   });
 });
 
-// ====== New: UPDATE record (metadata only) ======
+// UPDATE record
 app.put("/records/:id", verifyToken, (req, res) => {
   const { id } = req.params;
   let {
@@ -679,7 +790,6 @@ app.put("/records/:id", verifyToken, (req, res) => {
   if (!title || !classification || !priority || !description || !source || !retention_period || !destination_office) {
     return res.status(400).json({ error: "Missing required fields" });
   }
-
   record_origin = normalizeOrigin(record_origin);
 
   const sql = `
@@ -694,12 +804,9 @@ app.put("/records/:id", verifyToken, (req, res) => {
     source, retention_period, destination_office, record_origin,
     id
   ];
-
   db.query(sql, vals, (err, result) => {
     if (err) {
-      if (err.code === "ER_DUP_ENTRY") {
-        return res.status(409).json({ error: "Control number already exists" });
-      }
+      if (err.code === "ER_DUP_ENTRY") return res.status(409).json({ error: "Control number already exists" });
       return res.status(500).json({ error: err.message });
     }
     if (result.affectedRows === 0) return res.status(404).json({ error: "Record not found" });
@@ -707,11 +814,9 @@ app.put("/records/:id", verifyToken, (req, res) => {
   });
 });
 
-// ====== New: DELETE record (and its files on disk) ======
+// DELETE record (+ files)
 app.delete("/records/:id", verifyToken, (req, res) => {
   const { id } = req.params;
-
-  // Fetch file paths to delete physically after DB deletion
   const sel = "SELECT file_path FROM record_files WHERE record_id = ?";
   db.query(sel, [id], (selErr, rows) => {
     if (selErr) return res.status(500).json({ error: selErr.message });
@@ -721,51 +826,63 @@ app.delete("/records/:id", verifyToken, (req, res) => {
 
     db.query(delFiles, [id], (dfErr) => {
       if (dfErr) return res.status(500).json({ error: dfErr.message });
-
       db.query(delRec, [id], (drErr, result) => {
         if (drErr) return res.status(500).json({ error: drErr.message });
         if (result.affectedRows === 0) return res.status(404).json({ error: "Record not found" });
 
-        // Best-effort unlink
         (rows || []).forEach(r => {
           if (r.file_path && r.file_path.startsWith("/uploads/")) {
             const abs = path.join(__dirname, r.file_path);
             fs.unlink(abs, () => {});
           }
         });
-
         res.json({ success: true, message: "Record and files deleted" });
       });
     });
   });
 });
-// =================== DOCUMENT TRACKING ROUTES ===================
 
-// Release document
-app.post("/api/tracking/release", verifyToken, async (req, res) => {
-  const { record_id, to_office } = req.body;
-  const actor = req.user.name;
-
-  db.query(
-    "UPDATE records SET status='IN_TRANSIT' WHERE id=?",
-    [record_id],
-    (err) => {
-      if (err) return res.status(500).json({ message: err.message });
-
-      db.query(
-        "INSERT INTO record_movements (record_id, action, from_office, to_office, actor) VALUES (?, 'RELEASED', ?, ?, ?)",
-        [record_id, req.user.office, to_office, actor],
-        (err2) => {
-          if (err2) return res.status(500).json({ message: err2.message });
-          res.json({ message: "Document released successfully" });
-        }
-      );
-    }
-  );
+// ====== TRACKING ======
+// History
+app.get("/api/tracking/history/:id", verifyToken, (req, res) => {
+  const recordId = req.params.id;
+  const q = `
+    SELECT rm.*, u.name AS actor_name
+    FROM record_movements rm
+    LEFT JOIN users u ON rm.actor = u.name OR rm.actor = u.id
+    WHERE rm.record_id = ?
+    ORDER BY rm.timestamp ASC
+  `;
+  db.query(q, [recordId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
 });
 
-// Receive document
-app.post("/api/tracking/receive", verifyToken, async (req, res) => {
+// Release
+app.post("/api/tracking/release", verifyToken, (req, res) => {
+  const { record_id, to_office } = req.body;
+  const from_office = req.user?.office || "Unknown";
+  const actor = req.user?.name || "System";
+
+  const sql = `
+    INSERT INTO record_movements (record_id, action, from_office, to_office, actor)
+    VALUES (?, 'RELEASED', ?, ?, ?)
+  `;
+  db.query(sql, [record_id, from_office, to_office, actor], (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+
+    db.query("UPDATE records SET destination_office = ? WHERE id = ?", [to_office, record_id]);
+
+    const io = req.app.get("io");
+    io.emit("recordUpdated", { record_id, to_office, from_office, actor });
+
+    res.json({ success: true, message: "Record released successfully" });
+  });
+});
+
+// Receive
+app.post("/api/tracking/receive", verifyToken, (req, res) => {
   const { record_id, from_office } = req.body;
   const actor = req.user.name;
 
@@ -780,6 +897,10 @@ app.post("/api/tracking/receive", verifyToken, async (req, res) => {
         [record_id, from_office, req.user.office, actor],
         (err2) => {
           if (err2) return res.status(500).json({ message: err2.message });
+
+          const io = req.app.get("io");
+          io.emit("recordUpdated", { record_id, to_office: req.user.office, from_office, actor });
+
           res.json({ message: "Document received successfully" });
         }
       );
@@ -787,55 +908,27 @@ app.post("/api/tracking/receive", verifyToken, async (req, res) => {
   );
 });
 
-// Fetch tracking data for a specific office
-app.get("/api/tracking/:office", verifyToken, async (req, res) => {
-  const { office } = req.params;
-  try {
-    const documentsInOffice = await new Promise((resolve, reject) => {
-      db.query(
-        "SELECT * FROM records WHERE destination_office=? AND status='IN_OFFICE'",
-        [office],
-        (err, rows) => (err ? reject(err) : resolve(rows))
-      );
-    });
-
-    const inTransit = await new Promise((resolve, reject) => {
-      db.query(
-        "SELECT * FROM records WHERE status='IN_TRANSIT' AND destination_office != ?",
-        [office],
-        (err, rows) => (err ? reject(err) : resolve(rows))
-      );
-    });
-
-    const recentMovements = await new Promise((resolve, reject) => {
-      db.query(
-        "SELECT rm.*, r.title FROM record_movements rm LEFT JOIN records r ON r.id = rm.record_id WHERE from_office=? OR to_office=? ORDER BY timestamp DESC LIMIT 20",
-        [office, office],
-        (err, rows) => (err ? reject(err) : resolve(rows))
-      );
-    });
-
-    res.json({ documentsInOffice, inTransit, recentMovements });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server Error" });
-  }
-});
-
-// Fetch all offices (for modal dropdown)
-app.get("/offices", verifyToken, (req, res) => {
-  const sql = `SELECT DISTINCT office FROM users WHERE office IS NOT NULL AND office <> '' ORDER BY office ASC`;
-  db.query(sql, (err, rows) => {
-    if (err) return res.status(500).json({ message: err.message });
-    const offices = Array.from(new Set(rows.map(r => r.office)));
-    res.json(offices);
+// My-office via movements
+app.get("/api/tracking/my-office", verifyToken, (req, res) => {
+  const userOffice = req.user.office;
+  const q = `
+    SELECT r.*
+    FROM records r
+    WHERE r.id IN (
+      SELECT rm.record_id
+      FROM record_movements rm
+      WHERE rm.id = (SELECT MAX(id) FROM record_movements WHERE record_id = rm.record_id)
+      AND rm.to_office = ?
+    )
+  `;
+  db.query(q, [userOffice], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
   });
 });
 
-
-
-// ====== Start server ======
+// ====== Start ======
 const PORT = process.env.PORT || 8081;
-app.listen(PORT, () => {
-  console.log(`✅ Backend running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`✅ Backend + Socket.IO on ${PORT}`);
 });

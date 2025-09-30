@@ -5,7 +5,7 @@ const baseURL =
   process.env.REACT_APP_API_BASE?.replace(/\/$/, "") || "http://localhost:8081";
 
 const axios = Axios.create({
-  baseURL,
+  baseURL: "http://localhost:8081",
   withCredentials: false, // not using cookies for auth
 });
 

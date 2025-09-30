@@ -4,6 +4,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./AuthContext";
 import AttachmentViewer from "./Components/AttachmentViewer";
+import "bootstrap/dist/css/bootstrap.min.css";
 
 // Public pages
 import Login from "./login";     // <- ensure actual filename/casing matches (e.g. "./Login")
