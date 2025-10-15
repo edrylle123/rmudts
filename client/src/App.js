@@ -9,7 +9,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 // Public pages
 import Login from "./login";     // <- ensure actual filename/casing matches (e.g. "./Login")
 import Signup from "./Signup";   // <- ensure actual filename/casing matches
-
+import RoutingSlip from "./Components/RoutingSlip"; // <- NEW import for RoutingSlip component
 // Admin pages
 import Dashboard from "./Components/Dashboard";
 import CreateRecordForm from "./Components/CreateRecordForm";
@@ -23,9 +23,10 @@ import EditRecords from "./Components/EditRecords"; // <- FIXED import (no trail
 import DocumentTracking from "./Components/DocumentTracking";
 // User pages
 import UserDashboard from "./Components/UserDashboard";
-
 // Utils
 import ProtectedRoute from "./Components/ProtectedRoute";
+
+import NewRecord from "./Components/NewRecord";
 
 // Optional shared layout:
 // import AppLayout from "./AppLayout";
@@ -76,6 +77,7 @@ export default function App() {
             }
           />
 
+
           {/* Primary list path */}
           <Route
             path="/all"
@@ -122,13 +124,14 @@ export default function App() {
           />
 
           <Route
-            path="/view"
+            path="/attachment-viewer"
             element={
               <ProtectedRoute allowedRoles={["admin", "user"]}>
                 <AttachmentViewer />
               </ProtectedRoute>
             }
           />
+          
 
           {/* --------- Normal User-only Route --------- */}
           <Route
@@ -140,12 +143,29 @@ export default function App() {
             }
             
           />
+          {/* Routing Slip Route */}
+      <Route
+        path="/routing-slip"  
+        element={
+          <ProtectedRoute allowedRoles={["admin", "user"]}>
+            <RoutingSlip /> {/* <- NEW Route for RoutingSlip component */}
+          </ProtectedRoute>
+        }
+      />
            {/* Document Tracking Route */}
       <Route
         path="/tracking"
         element={
           <ProtectedRoute allowedRoles={["admin","user"]}>
             <DocumentTracking />
+          </ProtectedRoute>
+        }
+      />
+        <Route
+        path="/new-record"
+        element={
+          <ProtectedRoute allowedRoles={["admin","user"]}>
+            <NewRecord />
           </ProtectedRoute>
         }
       />

@@ -91,3 +91,4 @@
 /* Hard override any accidental global hiding */
 button, select { display: inline-block !important; visibility: visible !important; opacity: 1 !important; }
 .records-table table td { overflow: visible !important; }
+

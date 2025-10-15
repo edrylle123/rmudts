@@ -1,0 +1,66 @@
+/* UserDashboard record cards */
+.records-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  background-color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.card-header h3 {
+  font-size: 1.125rem;
+  font-weight: bold;
+}
+
+.card-body {
+  padding: 8px 0;
+}
+
+.card-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+/* Approve Button */
+.btn-approve {
+  background-color: #38a169;  /* Green */
+  color: white;
+  border: none;
+}
+
+.btn-approve:hover {
+  background-color: #2f855a;  /* Darker green on hover */
+  transform: scale(1.05);
+}
+
+/* Add Notation Button */
+.btn-notation {
+  background-color: #3182ce;  /* Blue */
+  color: white;
+  border: none;
+}
+
+.btn-notation:hover {
+  background-color: #2b6cb0;  /* Darker blue on hover */
+  transform: scale(1.05);
+}
+
+.office-select {
+  padding: 4px 8px;
+  border-radius: 4px;
+}

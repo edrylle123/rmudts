@@ -1,56 +1,78 @@
-// client/src/Components/EditRecord.js
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import axios from "./axios";
+import Select from "react-select";
 
-const CLASSIFICATION_OPTIONS = ["Academic","Administrative","Financial","HR","Others"];
-const PRIORITY_OPTIONS = ["Low","Normal","High"];
-const RETENTION_OPTIONS = ["1 Year","3 Years","5 Years","Permanent"];
-const DESTINATION_OFFICES = [
-  "Accounting Office","Cashier","supply office","Office of the Budget officer",
-  "office of the Chief Administrative Officer- Finance","PACD","Marketing",
-  "Office of the Planning Officer","Office of the Campus Administrator","Legal Office",
-  "Quality and Assurance Office","Registrar office","Office of the Vice President - Admin and Finance",
-  "Office of the Board Secretary","Office of the President","office of the Alumni",
-  "Human Resource Office","International Relations Office","General Servicing Unit","Planning Management Unit",
-  "Information Technology Office","Information Office","Procurement office","Office of the Supervising Administrative Officer",
+// Options for select fields
+const CLASSIFICATION_OPTIONS = ["Academic", "Administrative", "Financial", "HR", "Others"];
+const PRIORITY_OPTIONS = ["Normal", "Urgent", "Immediate"];
+const RETENTION_OPTIONS = [
+  { label: "1 Year", value: "1" },
+  { label: "2 Years", value: "2" },
+  { label: "3 Years", value: "3" },
+  { label: "4 Years", value: "4" },
+  { label: "5 Years", value: "5" },
+  { label: "6 Years", value: "6" },
+  { label: "7 Years", value: "7" },
+  { label: "8 Years", value: "8" },
+  { label: "9 Years", value: "9" },
+  { label: "10 Years", value: "10" },
+  { label: "Permanent", value: "Permanent" },
 ];
-const ORIGIN_OPTIONS = ["Internal","External"];
 
-// Reusable input + datalist with auto-normalize on blur
+const DESTINATION_OFFICES = [
+  "Accounting Office", "Cashier", "Supply Office", "Office of the Budget Officer",
+  "Office of the Chief Administrative Officer- Finance", "PACD", "Marketing",
+  "Office of the Planning Officer", "Office of the Campus Administrator", "Legal Office",
+  "Quality and Assurance Office", "Registrar Office",
+  "Office of the Vice President - Admin and Finance", "Office of the Board Secretary",
+  "Office of the President", "Office of the Alumni", "Human Resource Office",
+  "International Relations Office", "General Servicing Unit", "Planning Management Unit",
+  "Information Technology Office", "Information Office", "Procurement Office",
+  "Office of the Supervising Administrative Officer",
+];
+
+// Autocomplete input component for options
 function AutocompleteInput({ label, name, value, onChange, options, required = true, placeholder }) {
   const listId = `${name}-list`;
+
   const normalizeOnBlur = () => {
     if (!value) return;
-    const hit = options.find(o => o.toLowerCase() === String(value).trim().toLowerCase());
+    const hit = options.find((opt) => opt.toLowerCase() === value.trim().toLowerCase());
     if (hit && hit !== value) onChange({ target: { name, value: hit } });
   };
+
   return (
     <div className="col-md-6">
-      <label className="form-label">{label}{required ? " *" : ""}</label>
+      <label className="form-label">
+        {label}
+        {required ? " *" : ""}
+      </label>
       <input
         className="form-control"
         name={name}
         list={listId}
-        value={value || ""}
-        onChange={onChange}
+        value={value ?? ""}
         onBlur={normalizeOnBlur}
+        onChange={onChange}
         required={required}
         placeholder={placeholder}
         autoComplete="off"
       />
       <datalist id={listId}>
-        {options.map(o => <option key={o} value={o} />)}
+        {options.map((opt) => (
+          <option key={opt} value={opt} />
+        ))}
       </datalist>
       {required && <div className="invalid-feedback">This field is required.</div>}
     </div>
   );
 }
 
-export default function EditRecords() {
-  const { id } = useParams(); // can be numeric id or a control number (string)
+export default function EditRecord() {
+  const { id } = useParams();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -58,136 +80,151 @@ export default function EditRecords() {
   const [error, setError] = useState(null);
   const [validated, setValidated] = useState(false);
 
-  // Numeric server id used for PUT
-  const [apiId, setApiId] = useState(null);
-  const [form, setForm] = useState({
+  // Initialize formData with empty or default values
+  const [formData, setFormData] = useState({
     control_number: "",
-    title: "",
-    classification: "",
-    priority: "",
+    office_requestor: "",
     description: "",
-    source: "",
+    concerned_personnel: "",
     retention_period: "",
     destination_office: "",
-    record_origin: "Internal",
+    classification: "",
+    priority: "",
+    record_origin: "internal",
   });
 
+  // Handle form field changes
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
+    setFormData((prevState) => ({ ...prevState, [name]: value }));
   };
 
-  // fetch record either by numeric id or by control number
+  // Load record data for editing
   useEffect(() => {
-    const load = async () => {
+    const loadRecord = async () => {
       setError(null);
       setLoading(true);
       try {
-        let res;
-        if (/^\d+$/.test(id)) {
-          res = await axios.get(`/records/${id}`);
-        } else {
-          res = await axios.get(`/records/by-control/${encodeURIComponent(id)}`);
-        }
-        const r = res.data;
-        setApiId(r.id);
-        setForm({
-          control_number: r.control_number || "",
-          title: r.title || "",
-          classification: r.classification || "",
-          priority: r.priority || "Normal",
-          description: r.description || "",
-          source: r.source || "",
-          retention_period: r.retention_period || "",
-          destination_office: r.destination_office || "",
-          record_origin: (r.record_origin || "internal").toLowerCase() === "external" ? "External" : "Internal",
+        const res = await axios.get(`/records/${id}`);
+        const record = res.data;
+
+        const retentionPeriod = record.retention_period ? String(record.retention_period) : "1";
+
+        setFormData({
+          ...record,
+          retention_period: retentionPeriod,
+          record_origin: record.record_origin || "internal",
         });
       } catch (e) {
         console.error(e);
-        setError(
-          e?.response?.data?.error ||
-          e?.response?.data?.message ||
-          "Failed to load record"
-        );
+        setError("Failed to load record");
       } finally {
         setLoading(false);
       }
     };
-    load();
+    loadRecord();
   }, [id]);
 
-  const ensureInList = (value, list) =>
-    list.some(o => o.toLowerCase() === String(value).trim().toLowerCase());
+  // Handle form submission
+// const handleSubmit = async (e) => {
+//   e.preventDefault();
+//   setError(null);
+//   setValidated(true);
+//   const formEl = e.currentTarget;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setValidated(true);
+//   // Validate the form before submission
+//   if (formEl.checkValidity() === false) return;
 
-    // native required validation
-    const formEl = e.currentTarget;
-    if (formEl?.checkValidity && !formEl.checkValidity()) {
-      return; // browser will show invalid-feedback
-    }
+//   // Ensure retention_period is provided
+//   if (!formData.retention_period) {
+//    setError(`Failed to update record: ${e.response?.data?.error || e.message}`);
+//     return;
+//   }
 
-    // list validations (case-insensitive)
-    if (!ensureInList(form.classification, CLASSIFICATION_OPTIONS)) {
-      setError("Classification must match one of the suggestions.");
-      return;
-    }
-    if (!ensureInList(form.priority, PRIORITY_OPTIONS)) {
-      setError("Priority must be Low, Normal, or High.");
-      return;
-    }
-    if (!ensureInList(form.retention_period, RETENTION_OPTIONS)) {
-      setError("Retention must match one of the suggestions.");
-      return;
-    }
-    if (!ensureInList(form.record_origin, ORIGIN_OPTIONS)) {
-      setError("Record Origin must be Internal or External.");
-      return;
-    }
-    if (!ensureInList(form.destination_office, DESTINATION_OFFICES)) {
-      setError("Destination Office must match one of the suggestions.");
-      return;
-    }
-    if (!apiId) {
-      setError("This record has no numeric ID and cannot be updated.");
-      return;
-    }
+//   // Format retention_period if necessary
+//   // const formattedRetentionPeriod = formData.retention_period === "Permanent" ? "Permanent" : formData.retention_period;
+// const formattedRetentionPeriod = formData.retention_period === "Permanent" 
+//   ? "Permanent" 
+//   : `${formData.retention_period} Years`; // Ensure it's formatted correctly
 
-    setSaving(true);
-    try {
-      const payload = {
-        control_number: form.control_number,
-        title: form.title,
-        classification:
-          CLASSIFICATION_OPTIONS.find(o => o.toLowerCase() === form.classification.toLowerCase()) || form.classification,
-        priority:
-          PRIORITY_OPTIONS.find(o => o.toLowerCase() === form.priority.toLowerCase()) || form.priority,
-        description: form.description,
-        source: form.source,
-        retention_period:
-          RETENTION_OPTIONS.find(o => o.toLowerCase() === form.retention_period.toLowerCase()) || form.retention_period,
-        destination_office:
-          DESTINATION_OFFICES.find(o => o.toLowerCase() === form.destination_office.toLowerCase()) || form.destination_office,
-        record_origin: form.record_origin, // server normalizes to internal/external
-      };
+//   setSaving(true);
+//   try {
+//     const payload = {
+//       control_number: formData.control_number,
+//       office_requestor: formData.office_requestor,
+//       description: formData.description,
+//       concerned_personnel: formData.concerned_personnel,
+//       retention_period: formattedRetentionPeriod,  // Send either the formatted string or the raw value
+//       destination_office: formData.destination_office,
+//       classification: formData.classification,
+//       priority: formData.priority,
+//       record_origin: formData.record_origin || "internal",
+//     };
 
-      await axios.put(`/records/${apiId}`, payload);
-      alert("Record updated.");
-      navigate(-1); // go back to the previous page (no hardcoded route)
-    } catch (e) {
-      console.error(e);
-      setError(
-        e?.response?.data?.error ||
-        e?.response?.data?.message ||
-        "Failed to update record"
-      );
-    } finally {
-      setSaving(false);
+//     console.log("Payload being sent:", payload); // Debug log for payload
+// console.log("Form data being sent:", formData);
+//     // Send PUT request to update the record
+//     await axios.put(`/records/${id}`, payload);
+//     alert("Record updated.");
+//     navigate(-1); // Go back to the previous page
+//   } catch (e) {
+//     console.error("Error during record update:", e.response?.data || e.message);
+//     setError("Failed to update record");
+//   } finally {
+//     setSaving(false);
+//   }
+// };
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError(null);
+  setValidated(true);
+  const formEl = e.currentTarget;
+
+  // Validate the form before submission
+  if (formEl.checkValidity() === false) return;
+
+  // Ensure all fields are populated
+  const requiredFields = ["control_number", "office_requestor", "description", "concerned_personnel", "retention_period", "destination_office", "classification", "priority"];
+  for (const field of requiredFields) {
+    if (!formData[field]) {
+      setError(`${field} is required.`);
+      return;
     }
-  };
+  }
+
+  // Format retention_period if necessary
+  // const formattedRetentionPeriod = formData.retention_period === "Permanent" ? "Permanent" : formData.retention_period;
+const formattedRetentionPeriod = formData.retention_period === "Permanent" 
+  ? "Permanent" 
+  : `${formData.retention_period} Years`;
+
+  setSaving(true);
+  try {
+    const payload = {
+      control_number: formData.control_number,
+      office_requestor: formData.office_requestor,
+      description: formData.description,
+      concerned_personnel: formData.concerned_personnel,
+      retention_period: formattedRetentionPeriod,
+      destination_office: formData.destination_office,
+      classification: formData.classification,
+      priority: formData.priority,
+      record_origin: formData.record_origin || "internal",
+    };
+
+    console.log("Payload being sent:", payload); // Debug log for payload
+
+    // Send PUT request to update the record
+    await axios.put(`/records/${id}`, payload);
+    alert("Record updated.");
+    navigate(-1); // Go back to the previous page
+  } catch (e) {
+    console.error("Error during record update:", e.response?.data || e.message);
+    setError("Failed to update record");
+  } finally {
+    setSaving(false);
+  }
+};
 
   return (
     <div className="d-flex">
@@ -195,138 +232,127 @@ export default function EditRecords() {
       <div className="flex-grow-1">
         <Navbar />
         <div className="container p-3">
-          <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-            <h2 className="mb-0">Edit Record</h2>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-secondary"
-              onClick={() => navigate(-1)}
-            >
-              Back
-            </button>
-          </div>
+          <h2>Edit Record</h2>
+          {error && <div className="alert alert-danger">{error}</div>}
 
-          {loading ? (
-            <div>Loading…</div>
-          ) : (
-            <form className={`row g-3 ${validated ? "was-validated" : ""}`} onSubmit={handleSubmit} noValidate>
-              {error && <div className="col-12 alert alert-danger">{error}</div>}
-
-              <div className="col-md-6">
-  <label className="form-label">Control No. *</label>
-  <input
-    className="form-control"
-    name="control_number"
-    required
-    value={form.control_number}
-    onChange={handleChange}
-    autoComplete="off"
-  />
-  <div className="form-text">
-    Allowed: letters, numbers, dot, underscore, slash, dash.
-  </div>
-</div>
-
-
-              <div className="col-md-6">
-                <label className="form-label">Title *</label>
-                <input
-                  className="form-control"
-                  name="title"
-                  required
-                  value={form.title}
-                  onChange={handleChange}
-                  autoComplete="off"
-                />
-                <div className="invalid-feedback">Title is required.</div>
-              </div>
-
-              <AutocompleteInput
-                label="Classification"
-                name="classification"
-                value={form.classification}
+          <form className={`row g-3 ${validated ? "was-validated" : ""}`} onSubmit={handleSubmit} noValidate>
+            {/* Control No */}
+            <div className="col-md-6">
+              <label className="form-label">Control No. *</label>
+              <input
+                className="form-control"
+                name="control_number"
+                value={formData.control_number}
                 onChange={handleChange}
-                options={CLASSIFICATION_OPTIONS}
-                placeholder="Start typing… e.g., Academic"
+                disabled
+                required
+                placeholder="e.g., 2025-09-001"
               />
+              <div className="invalid-feedback">Control number is required.</div>
+              <div className="form-text">Letters, numbers, -, _, /, . allowed</div>
+            </div>
 
-              <AutocompleteInput
-                label="Priority"
-                name="priority"
-                value={form.priority}
+            {/* Office / Requestor */}
+            <div className="col-md-6">
+              <label className="form-label">Office/ Requestor *</label>
+              <input
+                className="form-control"
+                name="office_requestor"
+                value={formData.office_requestor}
                 onChange={handleChange}
-                options={PRIORITY_OPTIONS}
-                placeholder="Start typing… e.g., Normal"
+                required
               />
+              <div className="invalid-feedback">Office/Requestor is required.</div>
+            </div>
 
-              <AutocompleteInput
-                label="Retention"
-                name="retention_period"
-                value={form.retention_period}
+            {/* Concerned Personnel */}
+            <div className="col-md-6">
+              <label className="form-label">Concerned Personnel *</label>
+              <input
+                className="form-control"
+                name="concerned_personnel"
+                value={formData.concerned_personnel}
                 onChange={handleChange}
+                required
+              />
+              <div className="invalid-feedback">Concerned Personnel is required.</div>
+            </div>
+
+            {/* Description */}
+            <div className="col-12">
+              <label className="form-label">Title and Description *</label>
+              <textarea
+                className="form-control"
+                name="description"
+                rows={3}
+                value={formData.description}
+                onChange={handleChange}
+                required
+                placeholder="Provide title and description"
+              />
+              <div className="invalid-feedback">Title and Description are required.</div>
+            </div>
+
+            {/* Destination Office */}
+            <AutocompleteInput
+              label="Destination Office"
+              name="destination_office"
+              value={formData.destination_office}
+              onChange={handleChange}
+              options={DESTINATION_OFFICES}
+              placeholder="e.g., Accounting Office"
+            />
+
+            {/* Classification */}
+            <AutocompleteInput
+              label="Classification"
+              name="classification"
+              value={formData.classification}
+              onChange={handleChange}
+              options={CLASSIFICATION_OPTIONS}
+              placeholder="e.g., Academic"
+            />
+
+            {/* Priority */}
+            <AutocompleteInput
+              label="Priority"
+              name="priority"
+              value={formData.priority}
+              onChange={handleChange}
+              options={PRIORITY_OPTIONS}
+              placeholder="e.g., Normal"
+            />
+
+            {/* Retention Period */}
+            <div className="col-md-6">
+              <label className="form-label">Retention Period *</label>
+              <Select
                 options={RETENTION_OPTIONS}
-                placeholder="Start typing… e.g., 1 Year"
+                onChange={(option) =>
+                  setFormData((prev) => ({ ...prev, retention_period: option?.value ?? "1" }))
+                }
+                value={RETENTION_OPTIONS.find((opt) => opt.value === formData.retention_period) || null}
+                placeholder="Select Retention Period"
+                isSearchable
               />
+            </div>
 
-              <div className="col-12">
-                <label className="form-label">Description *</label>
-                <textarea
-                  className="form-control"
-                  rows="3"
-                  name="description"
-                  required
-                  value={form.description}
-                  onChange={handleChange}
-                  autoComplete="off"
-                />
-                <div className="invalid-feedback">Description is required.</div>
-              </div>
+            {/* Record Origin (read-only display) */}
+            <div className="col-md-6">
+              <label className="form-label">Record Origin</label>
+              <input className="form-control" value={formData.record_origin} disabled />
+            </div>
 
-              <div className="col-md-6">
-                <label className="form-label">Concerned Personnel *</label>
-                <input
-                  className="form-control"
-                  name="source"
-                  required
-                  value={form.source}
-                  onChange={handleChange}
-                  autoComplete="off"
-                />
-                <div className="invalid-feedback">This field is required.</div>
-              </div>
-
-              <AutocompleteInput
-                label="Destination Office"
-                name="destination_office"
-                value={form.destination_office}
-                onChange={handleChange}
-                options={DESTINATION_OFFICES}
-                placeholder="Start typing… e.g., Accounting Office"
-              />
-
-              <AutocompleteInput
-                label="Record Origin"
-                name="record_origin"
-                value={form.record_origin}
-                onChange={handleChange}
-                options={ORIGIN_OPTIONS}
-                placeholder="Internal or External"
-              />
-
-              <div className="col-12 d-flex gap-2">
-                <button type="submit" className="btn btn-primary" disabled={saving || !apiId}>
-                  {saving ? "Saving…" : "Save Changes"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => navigate(-1)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
+            {/* Buttons */}
+            <div className="col-12 d-flex gap-2">
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? "Saving…" : "Save Changes"}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

@@ -97,7 +97,7 @@ export default function Login() {
                 className="form-control"
                 value={form.email}
                 onChange={onChange}
-                placeholder="you@example.com"
+                placeholder="Email Ngani"
                 autoComplete="username"
                 required
               />
@@ -111,7 +111,7 @@ export default function Login() {
                 className="form-control"
                 value={form.password}
                 onChange={onChange}
-                placeholder="••••••••"
+                placeholder="password Ngani"
                 autoComplete="current-password"
                 required
               />
@@ -124,7 +124,7 @@ export default function Login() {
 
           <div className="mt-3 text-center">
             <small className="text-muted">
-              No account? <Link to="/signup">Create one</Link>
+              <Link to="/signup">Forgotten Username or Password</Link>
             </small>
           </div>
         </div>
