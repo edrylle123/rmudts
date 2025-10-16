@@ -444,10 +444,10 @@ useEffect(() => {
                       )}
                     </div>
                   </div>
-                  <div className="card-footer">
+                  {/* <div className="card-footer">
                     <button className="btn-approve" onClick={() => alert("Approve record")}>Approve</button>
                     <button className="btn-notation" onClick={() => navigate("/routing-slip")}>Add Notation</button>
-                  </div>
+                  </div> */}
                 </div>
               ))}
             </div>

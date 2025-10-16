@@ -217,29 +217,30 @@ async function convertToPdfIfNeeded(file) {
 
 // ====== AUTH ROUTES ======
 app.get("/login", (req, res) => {
-  res.json({ message: "POST /login with { email, password }" });
+  res.json({ message: "POST /login with { idnumber, password }" });
 });
 
 app.post("/signup", async (req, res) => {
-  const { name, email, password, role, idnumber, office } = req.body || {};
-  if (!name || !email || !password || !role || !office || role === "Select Role") {
+  const { name, password, role, idnumber, office } = req.body || {};
+  if (!name ||  !password || !role || !office || role === "Select Role") {
     return res.status(400).json({
       success: false,
       message: "All fields including role and office are required",
     });
   }
   try {
-    db.query("SELECT id FROM users WHERE email = ?", [email], async (err, rows) => {
+    db.query("SELECT id FROM users WHERE idnumber = ?", [idnumber], async (err, rows) => {
       if (err) return res.status(500).json({ success: false, message: err.message });
+      console.error("Database error while checking for existing ID:", err);
       if (rows.length > 0) {
-        return res.status(409).json({ success: false, message: "Email already registered" });
+        return res.status(409).json({ success: false, message: "ID Number already registered" });
       }
       const hashedPassword = await bcrypt.hash(password, 10);
       const sql =
-        "INSERT INTO users (name, email, password, role, idnumber, office) VALUES (?, ?, ?, ?, ?, ?)";
+        "INSERT INTO users (name,  password, role, idnumber, office) VALUES (?, ?, ?, ?, ?)";
       db.query(
         sql,
-        [name, email, hashedPassword, role, idnumber || "", office],
+        [name,  hashedPassword, role, idnumber , office],
         (insertErr, result) => {
           if (insertErr) {
             return res.status(500).json({ success: false, message: insertErr.message });
@@ -248,7 +249,7 @@ app.post("/signup", async (req, res) => {
             success: true,
             message: "User created successfully",
             user: {
-              id: result.insertId, name, email, role, idnumber: idnumber || "", office,
+              id: result.insertId, name,  role, idnumber: idnumber, office,
             },
           });
         }
@@ -260,24 +261,24 @@ app.post("/signup", async (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) return res.status(400).json({ message: "Email and password required" });
-  db.query("SELECT * FROM users WHERE email = ?", [email], async (err, rows) => {
+  const { idnumber, password } = req.body || {};
+  if (!idnumber || !password) return res.status(400).json({ message: "ID Number and password required" });
+  db.query("SELECT * FROM users WHERE idnumber = ?", [idnumber], async (err, rows) => {
     if (err) return res.status(500).json({ message: err.message });
     if (!rows || rows.length === 0) {
-      return res.status(401).json({ success: false, message: "Invalid email or password" });
+      return res.status(401).json({ success: false, message: "Invalid ID Number or password" });
     }
     const user = rows[0];
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ success: false, message: "Invalid email or password" });
+    if (!isMatch) return res.status(401).json({ success: false, message: "Invalid ID Number or password" });
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, name: user.name, office: user.office },
+      { id: user.id, idnumber: user.idnumber, role: user.role, name: user.name, office: user.office },
       JWT_SECRET,
       { expiresIn: "1h" }
     );
     const refreshToken = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, name: user.name, office: user.office },
+      { id: user.id, idnumber: user.idnumber, role: user.role, name: user.name, office: user.office },
       REFRESH_TOKEN_SECRET,
       { expiresIn: "7d" }
     );
@@ -287,8 +288,8 @@ app.post("/login", (req, res) => {
       token,
       refreshToken,
       user: {
-        id: user.id, name: user.name, email: user.email, role: user.role,
-        idnumber: user.idnumber || "", office: user.office,
+        id: user.id, name: user.name, role: user.role,
+        idnumber: user.idnumber, office: user.office,
       },
     });
   });
@@ -320,9 +321,9 @@ app.get("/users", verifyToken, verifyAdmin, (req, res) => {
 });
 app.put("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
   const { id } = req.params;
-  const { name, email, role, password, idnumber, office } = req.body || {};
-  if (!name || !email || !role) {
-    return res.status(400).json({ message: "name, email and role are required" });
+  const { name,  role, password, idnumber, office } = req.body || {};
+  if (!name || !idnumber || !role) {
+    return res.status(400).json({ message: "name, idnumber and role are required" });
   }
   try {
     let sql, values;
@@ -1182,4 +1183,3 @@ const PORT = process.env.PORT || 8081;
 server.listen(PORT, () => {
   console.log(`✅ Backend + Socket.IO on ${PORT}`);
 });
-

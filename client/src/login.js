@@ -9,7 +9,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ idNumber: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -22,15 +22,15 @@ export default function Login() {
     e.preventDefault();
     setErr("");
 
-    if (!form.email.trim() || !form.password.trim()) {
-      setErr("Email and password are required.");
+    if (!form.idNumber.trim() || !form.password.trim()) {
+      setErr("ID Number and password are required.");
       return;
     }
 
     try {
       setLoading(true);
       const res = await axios.post("/login", {
-        email: form.email.trim(),
+        idnumber: form.idNumber,
         password: form.password,
       });
 
@@ -46,7 +46,7 @@ export default function Login() {
       login(user, token, refreshToken);
 
       // extra convenience keys for Navbar, etc.
-      localStorage.setItem("userEmail", user.email || "");
+      localStorage.setItem("userIdNumber", user.idnumber || "");
       localStorage.setItem("userRole", user.role || "");
       localStorage.setItem("userOffice", user.office || "");
 
@@ -90,14 +90,14 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="d-grid gap-3">
             <div>
-              <label className="form-label">Email</label>
+              <label className="form-label">ID Number</label>
               <input
-                type="email"
-                name="email"
+                type="text"
+                name="idNumber"
                 className="form-control"
-                value={form.email}
+                value={form.idNumber}
                 onChange={onChange}
-                placeholder="Email Ngani"
+                placeholder="ID Number Ngani"
                 autoComplete="username"
                 required
               />

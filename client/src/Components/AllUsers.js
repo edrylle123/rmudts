@@ -7,31 +7,30 @@ import Navbar from "./Navbar";
 import { useAuth } from "../AuthContext";
 
 const OFFICE_OPTIONS = [
-  "Office of the President",
-  "VP Admin and Finance",
-  "VP Academic Research and Extension",
-  "Office of the Campus Administrator",
-  "Office of the University Board Secretary",
-  "Office of the Supervising Administrative Officer",
-  "Office of the Chief Administrative Officer",
-  "Accounting Office",
+   "Accounting Office",
   "Cashier",
   "Supply Office",
-  "Budget Office",
-  "Accounting and Finance Office",
-  "Planning and Development Office",
-  "Quality Assurance Office",
-  "Legal Unit",
-  "CITCS",
-  "Office of the Registrar",
-  "Alumni Office",
-  "Information Technology Office",
-  "General Services Unit",
-  "Project Management Unit",
-  "Information Office",
+  "Office of the Budget Officer",
+  "Office of the Chief Administrative Officer- Finance",
+  "PACD",
+  "Marketing",
+  "Office of the Planning Officer",
+  "Office of the Campus Administrator",
+  "Legal Office",
+  "Quality and Assurance Office",
+  "Registrar Office",
+  "Office of the Vice President - Admin and Finance",
+  "Office of the Board Secretary",
+  "Office of the President",
+  "Office of the Alumni",
+  "Human Resource Office",
   "International Relations Office",
+  "General Servicing Unit",
+  "Planning Management Unit",
+  "Information Technology Office",
+  "Information Office",
   "Procurement Office",
-  "Human Resource Management Office",
+  "Office of the Supervising Administrative Officer",
 ];
 
 export default function AllUsers() {
@@ -64,6 +63,7 @@ export default function AllUsers() {
         u.office.name ||
         u.office.title ||
         u.office.office_name ||
+        
         u.office.officeTitle;
       if (nested) return nested;
     }
@@ -268,6 +268,9 @@ export default function AllUsers() {
                   <tr>
                     <th style={{ minWidth: 180 }}>Name</th>
                     <th style={{ minWidth: 220 }}>Email</th>
+                    <th style={{ minWidth: 220 }}>ID Number</th>
+
+
                     <th>Role</th>
                     <th style={{ minWidth: 220 }}>Office</th>
                     <th style={{ width: 160 }}>Actions</th>
@@ -278,6 +281,7 @@ export default function AllUsers() {
                     <tr key={r.key}>
                       <td>{r.name}</td>
                       <td>{r.email}</td>
+                      <td>{r.idnumber}</td>
                       <td>{r.role}</td>
                       <td>{r.office}</td>
                       <td className="d-flex gap-2">

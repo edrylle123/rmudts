@@ -6,7 +6,8 @@ import axios from "./axios";
 export default function CreateUserForm() {
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
+    // email: "",
+    idnumber: "", 
     password: "",
     role: "user",
     office: "",
@@ -26,7 +27,7 @@ export default function CreateUserForm() {
     try {
       await axios.post("/signup", formData);
       alert("User created successfully!");
-      setFormData({ name: "", email: "", password: "", role: "user", office: "" });
+      setFormData({ name: "", password: "", role: "user", office: "" , idnumber: ""});
     } catch (err) {
       console.error(err);
       setError("Error creating user");
@@ -36,7 +37,7 @@ export default function CreateUserForm() {
   };
 
   const resetForm = () =>
-    setFormData({ name: "", email: "", password: "", role: "user", office: "" });
+    setFormData({ name: "", password: "", role: "user", office: "" , idnumber: ""});
 
   return (
     <form onSubmit={handleSubmit} className="row g-3">
@@ -55,12 +56,12 @@ export default function CreateUserForm() {
       </div>
 
       <div className="col-md-6">
-        <label className="form-label">Email *</label>
+        <label className="form-label">ID Number *</label>
         <input
-          type="email"
-          name="email"
+          type="text"
+          name="idnumber"
           className="form-control"
-        value={formData.email}
+          value={formData.idnumber}
           onChange={handleChange}
           required
         />
@@ -108,6 +109,10 @@ export default function CreateUserForm() {
           <option>Office of the University Board Secretary</option>
           <option>Office of the Supervising Administrative Officer</option>
           <option>Office of the Chief Administrative Officer</option>
+          <option>PACD</option>
+          <option>Marketing Office</option>
+
+
           <option>Accounting Office</option>
           <option>Cashier</option>
           <option>Supply Office</option>

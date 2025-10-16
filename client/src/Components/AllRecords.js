@@ -571,6 +571,7 @@ export default function AllRecords() {
   const [docType, setDocType] = useState("All");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [officeRequestor, setOfficeRequestor] = useState("All");
 
   const navigate = useNavigate();
 
@@ -609,6 +610,7 @@ export default function AllRecords() {
     setOffice("All");
     setClassification("All");
     setPriority("All");
+    setOfficeRequestor("All");
     setDocType("All");
     setFromDate("");
     setToDate("");
@@ -648,6 +650,7 @@ export default function AllRecords() {
           title: r.title || "",
           classification: r.classification || "",
           priority: r.priority || "Normal",
+          office_requestor: r.office_requestor || "",
           destination_office: r.destination_office || "",
           record_origin: r.record_origin || "Unknown",
           created_at: r.created_at || null,
@@ -677,6 +680,8 @@ export default function AllRecords() {
     return records.filter((r) => {
       if (ql && ![r.control_number, r.title, r.classification, r.destination_office, r.record_origin].join(" ").toLowerCase().includes(ql)) return false;
       if (office !== "All" && r.destination_office !== office) return false;
+      if (office !== "All" && r.office_requestor !== office) return false;
+
       if (classification !== "All" && r.classification !== classification) return false;
       if (priority !== "All" && r.priority !== priority) return false;
       if (docType !== "All" && r.record_origin !== docType) return false;
@@ -738,11 +743,11 @@ export default function AllRecords() {
   };
 
   return (
-    <div className="d-flex">
+    <div className="d-flex" >
       <Sidebar />
-      <div className="flex-grow-1">
+      <div className="flex-grow-1" >
         <Navbar />
-        <div className="container p-3">
+        <div className="container p-1">
           <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
             <h2 className="mb-0">All Records</h2>
             <div className="text-muted small">
@@ -772,13 +777,15 @@ export default function AllRecords() {
           {loading ? (
             <div>Loading…</div>
           ) : (
-            <div className="table-responsive">
+            <div className="table-responsive" style={{ width: "100%" }}>
               <table className="table table-striped align-middle">
                 <thead>
                   <tr>
                     <th>Control No.</th>
                     <th>Classification</th>
                     <th>Priority</th>
+                    <th>Office Requestor</th>
+
                     <th>Destination Office</th>
                     <th>Record Origin</th>
                     <th>Created At</th>
@@ -796,7 +803,9 @@ export default function AllRecords() {
                     <tr key={r.id}>
                       <td>{r.control_number || "—"}</td>
                       <td>{r.classification || "—"}</td>
-                      <td><span className={priorityClass(r.priority)}>{r.priority || "Normal"}</span></td>
+                      <td><span className={priorityClass(r.priority)}>{r.priority || "-"}</span></td>
+                      <td>{r.office_requestor || "—"}</td>
+
                       <td>{r.destination_office || "—"}</td>
                       <td>{r.record_origin || "Unknown"}</td>
                       <td>{fmtDate(r.created_at)}</td>
