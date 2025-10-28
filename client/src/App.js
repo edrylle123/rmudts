@@ -25,8 +25,8 @@ import DocumentTracking from "./Components/DocumentTracking";
 import UserDashboard from "./Components/UserDashboard";
 // Utils
 import ProtectedRoute from "./Components/ProtectedRoute";
-
 import NewRecord from "./Components/NewRecord";
+ // <- ensure actual filename/casing matches
 
 // Optional shared layout:
 // import AppLayout from "./AppLayout";
@@ -52,6 +52,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/createrecord"
             element={

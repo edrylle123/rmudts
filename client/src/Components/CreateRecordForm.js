@@ -1,6 +1,6 @@
 
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import "./CreateRecordForm.css";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
@@ -380,7 +380,7 @@ const CONCERNED_PERSONNEL = [
 
 
 // Reusable autocomplete input
-function AutocompleteInput({ id, label, name, value, onChange, options, required = true, placeholder }) {
+function AutocompleteInput({ id, label, name, value, onChange, options, required = false, placeholder }) {
   const listId = `${id || name}-list`;
   const normalizeOnBlur = () => {
     if (!value) return;
@@ -410,18 +410,19 @@ function AutocompleteInput({ id, label, name, value, onChange, options, required
 }
 
 export default function CreateRecordForm() {
-
+  const [controlNumber, setControlNumber] = useState("");
   
   const [formData, setFormData] = useState({
-    control_number: "",
+    // control_number: "",
     office_requestor: "",
     classification: "",
     priority: "",
     description: "",
-    concerned_personnel: "",
-    retention_period: "",
-    destination_office: "",
-    record_origin: "", // Will hold the document type value
+    // concerned_personnel: "",
+    // retention_period: "",
+    // destination_office: "",
+    // record_origin: "", // Will hold the document type value
+    //  day: "",
   });
   const [activeOrigin, setActiveOrigin] = useState("");
   const [files, setFiles] = useState([]);
@@ -435,7 +436,10 @@ export default function CreateRecordForm() {
   const formRef = useRef(null);
   const fileInputRef = useRef(null);
   const [dragActive, setDragActive] = useState(false);
-
+  const [recordCounter, setRecordCounter] = useState(1); // Sequential record counter
+  const [lastDay, setLastDay] = useState(""); // Track the last day to reset the counter
+ const [dayError, setDayError] = useState(""); // To display day-related errors
+  const [nextControlNumber, setNextControlNumber] = useState('');
   // ---- handlers
   const handleOriginSwitch = (origin) => {
     setActiveOrigin(origin);
@@ -457,12 +461,13 @@ export default function CreateRecordForm() {
     setFilesError("");
   };
   
-  const handleFilesChange = (e) => { 
-    addFiles(e.target.files); 
-    e.target.value = ""; 
-  };
+//   const handleFilesChange = (e) => { 
+//     addFiles(e.target.files); 
+//     e.target.value = ""; 
+//   };
 
-  const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
+//   const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
+// const updatedFormData = { ...formData, destination_office: "Office of the President" };
 
   const onDragOver = (e) => { e.preventDefault(); e.stopPropagation(); setDragActive(true); };
   const onDragEnter = onDragOver;
@@ -491,139 +496,301 @@ export default function CreateRecordForm() {
     setFilesError("");  // Clear previous error if validation passes
     return true;
   };
+ const generateControlNumber = () => {
+    const currentYear = new Date().getFullYear().toString().slice(-2); // Last 2 digits of the year
+    const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0"); // 2 digits month
+    const currentDay = formData.day || String(formData.day).padStart(2, "0") ; // Use user-defined day or current day
+    const sequentialNumber = String(recordCounter).padStart(3, "0"); // Sequential number with leading zeros
 
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   console.log("Form data being submitted:", formData);  // Debug log
-  //   setError(null);
-  //   setFilesError("");
+    return `${currentYear}${currentMonth}${currentDay}-${sequentialNumber}`;
+  };
 
-  //   const formEl = formRef.current;
-  //   if (!(formEl?.checkValidity?.() ?? true)) {
-  //     setValidated(true);
-  //     return;
-  //   }
-  //   if (files.length === 0) {
-  //     setFilesError("Please attach at least one file.");
-  //     setValidated(true);
-  //     return;
-  //   }
 
-  //   // Validate files
-  //   if (!validateFiles()) return;
 
-  //   // Extract the numeric part of the retention_period (e.g., "2 Years" -> 2)
-  //   const retentionPeriodNumber = parseInt(formData.retention_period.split(" ")[0], 10);
+useEffect(() => {
+  const fetchNextControlNumber = async () => {
+    try {
+      const recordOrigin = activeOrigin === "Internal" ? "Internal" : "External";  // Determine the origin
+      const response = await axios.get(`http://localhost:8081/next-control-number?recordOrigin=${recordOrigin}`);
+      setControlNumber(response.data.control_number); // Set the control number from backend response
+    } catch (error) {
+      console.error("Error fetching next control number:", error);
+    }
+  };
+
+  if (activeOrigin) {  // Fetch control number when activeOrigin changes (either "Internal" or "External")
+    fetchNextControlNumber();
+  }
+}, [activeOrigin]);  // Dependency array with activeOrigin to trigger the effect when origin changes
+
+  // Handle the day change and reset sequential number
+  const handleDayChange = (e) => {
+    const newDay = e.target.value;
+    // Check if the day is a valid number and within the range 1-31
+    if (newDay < 1 || newDay > 31) {
+      setDayError("Please enter a valid day (1-31).");
+    } else {
+      setDayError(""); // Clear any previous error if day is valid
+      setFormData({ ...formData, day: newDay });
+      // If the day has changed, reset the counter
+      if (newDay !== lastDay) {
+        setRecordCounter(1); // Reset the counter to 1 for a new day
+        setLastDay(newDay); // Store the new day as the last day
+      }
+    }
+     const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+//   const handleSubmit = async (e) => {
+//   e.preventDefault();
+//   setError(null);
+//   setFilesError("");  // Reset file error message
+
+//   // Log form data to check what is being sent
+//   console.log("Form Data:", formData);
+
+//   const formEl = formRef.current;
+//   if (!(formEl?.checkValidity?.() ?? true)) {
+//     setValidated(true);
+//     return;
+//   }
+//   // Ensure destination office is always "Office of the President"
+//   const updatedFormData = { ...formData, destination_office: "Office of the President" };
+
+//   setSaving(true);
+//   setUploadPct(0);
+
+//   try {
+//     const fd = new FormData();
+//     Object.entries(formData).forEach(([k, v]) => {
+//       if (v) {
+//         fd.append(k, v);
+//       }
+//     });
+
+//     // Log FormData before sending the request
+//     for (let pair of fd.entries()) {
+//       console.log(pair[0] + ': ' + pair[1]);
+//     }
+
+//     // Make API call to create record
+//     const response = await axios.post("http://localhost:8081/records", fd, {
+//       headers: { "Content-Type": "multipart/form-data" },
+//       onUploadProgress: (evt) => {
+//         if (evt.total) setUploadPct(Math.round((evt.loaded * 100) / evt.total));
+//       },
+//     });
+
+//     // Success handling
+//     setCreatedCN(response.data.control_number);
+//     setShowQR(true);
+
+//     // Reset form and state
+//     setFormData({ control_number: "", office_requestor: "", destination_office: "", /* reset other fields */ });
+//     setFiles([]);
+//     setUploadPct(0);
+//     setValidated(false);
+//     setFilesError(""); // Reset any file error messages
+
+//   } catch (err) {
+//     console.error("API Request Error: ", err);  // Log the full error for debugging
+//     setError("Failed to create record. Please try again later.");
+//   } finally {
+//     setSaving(false);
+//   }
+// };
+
+
+
+// const handleSubmit = async (e) => {
+//   e.preventDefault();
+//   setError(null);
+//   setFilesError("");  // Reset file error message
+
+//   // Log form data to check what is being sent
+//   console.log("Form Data:", formData);
+
+//   const formEl = formRef.current;
+//   if (!(formEl?.checkValidity?.() ?? true)) {
+//     setValidated(true);
+//     return;
+//   }
+
+//   // Set destination_office to "Office of the President" before submitting
+//   const updatedFormData = { ...formData, destination_office: "Office of the President" };
+
+//   setSaving(true);
+//   setUploadPct(0);
+
+//   try {
+//     const fd = new FormData();
+//      Object.entries(formData).forEach(([k, v]) => {
+//         if (v) {
+//           fd.append(k, v);
+//         }
+//       });
+
+//     // Append all form data fields
+//     Object.entries(updatedFormData).forEach(([k, v]) => {
+//       if (v) {
+//         fd.append(k, v);
+//       }
+//     });
+
+//     // Log FormData before sending the request
+//     for (let pair of fd.entries()) {
+//       console.log(pair[0] + ': ' + pair[1]);
+//     }
+
+//     // Make API call to create record
+//     const response = await axios.post("http://localhost:8081/records", fd, {
+//       headers: { "Content-Type": "multipart/form-data" },
+//       onUploadProgress: (evt) => {
+//         if (evt.total) setUploadPct(Math.round((evt.loaded * 100) / evt.total));
+//       },
+//     });
+// setRecordCounter((prevCounter) => prevCounter + 1); // Increment counter for next record
+
+//     // Success handling
+//     setCreatedCN(response.data.control_number);
+//     setShowQR(true);
+
+//     // Reset form and state
+//     setFormData({ control_number: "", office_requestor: "", destination_office: "", /* reset other fields */ });
+//     setFiles([]);
+//     setUploadPct(0);
+//     setValidated(false);
+//     setFilesError(""); // Reset any file error messages
+
+//   } catch (err) {
+//     console.error("API Request Error: ", err);  // Log the full error for debugging
+//     setError("Failed to create record. Please try again later.");
+//   } finally {
+//     setSaving(false);
+//   }
+// };
+
+
+// const handleSubmit = async (e) => {
+//   e.preventDefault();
+//   const payload = { ...formData, control_number: controlNumber };
+//   setError(null);
+//   setFilesError("");  // Reset file error message
+
+//   // Log form data to check what is being sent
+//   console.log("Form Data:", formData);
+
+//   const formEl = formRef.current;
+//   if (!(formEl?.checkValidity?.() ?? true)) {
+//     setValidated(true);
+//     return;
+//   }
+
+//   // Set destination_office to "Office of the President" before submitting
+//   const updatedFormData = { ...formData, destination_office: "Office of the President" };
+//  delete updatedFormData.day;
+//   setSaving(true);
+//   setUploadPct(0);
+
+//   try {
+//     const fd = new FormData();
     
-  //   if (isNaN(retentionPeriodNumber)) {
-  //     setError("Invalid retention period.");
-  //     return;
-  //   }
+//     // Append updatedFormData fields (no need to append formData again)
+//     Object.entries(updatedFormData).forEach(([k, v]) => {
+//       if (v) {
+//         fd.append(k, v);
+//       }
+//     });
 
-  //   setSaving(true);
-  //   setUploadPct(0);
+//     // Log FormData before sending the request
+//     for (let pair of fd.entries()) {
+//       console.log(pair[0] + ': ' + pair[1]);
+//     }
 
-  //   try {
-  //     const fd = new FormData();
-  //     Object.entries(formData).forEach(([k, v]) => {
-  //       if (k === "retention_period") {
-  //         fd.append(k, retentionPeriodNumber); // Store numeric retention period
-  //       } else {
-  //         fd.append(k, v);
-  //       }
-  //     });
+//     // Make API call to create record
+//     const response = await axios.post("http://localhost:8081/records", fd, {
+//       headers: { "Content-Type": "multipart/form-data" },
+//       onUploadProgress: (evt) => {
+//         if (evt.total) setUploadPct(Math.round((evt.loaded * 100) / evt.total));
+//       },
+//     });
 
-  //     for (const f of files) {
-  //       fd.append("files", f); // Ensure the 'files' key matches what your backend expects
-  //     }
+//     // Increment counter for next record
+//     setRecordCounter((prevCounter) => prevCounter + 1);
 
-  //     // Check if files are properly appended to FormData
-  //     for (let pair of fd.entries()) {
-  //       console.log(pair[0] + ': ' + pair[1]);
-  //     }
+//     // Success handling
+//     setCreatedCN(response.data.control_number);
+//     setShowQR(true);
 
-  //     const response = await axios.post("http://localhost:8081/records", fd, {
-  //       headers: { "Content-Type": "multipart/form-data" },
-  //       onUploadProgress: (evt) => {
-  //         if (evt.total) setUploadPct(Math.round((evt.loaded * 100) / evt.total));
-  //       },
-  //     });
+//     // Reset form and state
+//     setFormData({ control_number: "", office_requestor: "", destination_office: "", /* reset other fields */ });
+//     setFiles([]);
+//     setUploadPct(0);
+//     setValidated(false);
+//     setFilesError(""); // Reset any file error messages
 
-  //     // Handle success
-  //     const cn = response.data.control_number || formData.control_number;
-  //     setCreatedCN(cn);
-  //     setShowQR(true);
 
-  //     // Reset form and states
-  //     setFormData({
-  //       control_number: "",
-  //       office_requestor: "",
-  //       classification: "",
-  //       priority: "",
-  //       description: "",
-  //       concerned_personnel: "",
-  //       retention_period: "",
-  //       destination_office: "",
-  //       record_origin: "",
-  //     });
-  //     setFiles([]);
-  //     setUploadPct(0);
-  //     setValidated(false);
-  //     setFilesError("");
-  //   } catch (err) {
-  //     console.error("Error during record creation:", err);
-  //     setError(
-  //       err?.response?.data?.error || "Failed to create record. Please try again later."
-  //     );
-  //   } finally {
-  //     setSaving(false);
-  //   }
-  // };
+
+//      // Sending the form data along with the generated control number to the backend
+//       await axios.post("http://localhost:8081/records", payload);
+//       alert("Record created successfully!");
+//       // Reset form or do other post-submit actions
+//   } catch (err) {
+//     console.error("API Request Error: ", err);  // Log the full error for debugging
+//     setError("Failed to create record. Please try again later.");
+//   } finally {
+//     setSaving(false);
+//   }
+// };
+
+
 const handleSubmit = async (e) => {
   e.preventDefault();
+
+  // Ensure control number is generated and included in the form data
+  const payload = { ...formData, control_number: controlNumber };
+
+  // Reset any previous errors
   setError(null);
-  setFilesError("");
+  setFilesError("");  // Reset file error message
+
+  // Log the form data to check what is being sent
+  console.log("Form Data:", payload);
 
   const formEl = formRef.current;
   if (!(formEl?.checkValidity?.() ?? true)) {
     setValidated(true);
     return;
   }
-  if (files.length === 0) {
-    setFilesError("Please attach at least one file.");
-    setValidated(true);
-    return;
-  }
 
-  // Validate files
-  if (!validateFiles()) return;
+  // Set destination_office to "Office of the President" before submitting
+  const updatedFormData = { ...payload, destination_office: "Office of the President" };
 
-  // Extract numeric part of retention period (e.g., "2 Years" -> 2)
-  const retentionPeriodNumber = parseInt(formData.retention_period.split(" ")[0], 10);
-  
-  if (isNaN(retentionPeriodNumber)) {
-    setError("Invalid retention period.");
-    return;
-  }
+  // Remove the day field from the form data if it's not needed
+  delete updatedFormData.day;
 
   setSaving(true);
   setUploadPct(0);
 
   try {
     const fd = new FormData();
-    Object.entries(formData).forEach(([k, v]) => {
-      if (k === "retention_period") {
-        fd.append(k, retentionPeriodNumber); // Store numeric retention period
-      } else {
+    
+    // Append updatedFormData fields to FormData object
+    Object.entries(updatedFormData).forEach(([k, v]) => {
+      if (v) {
         fd.append(k, v);
       }
     });
 
-    for (const f of files) {
-      fd.append("files", f); // Ensure the 'files' key matches what your backend expects
+    // Log FormData before sending the request
+    for (let pair of fd.entries()) {
+      console.log(pair[0] + ': ' + pair[1]);
     }
 
-    // Make API call to create record
+    // Make API call to create the record
     const response = await axios.post("http://localhost:8081/records", fd, {
       headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress: (evt) => {
@@ -632,16 +799,21 @@ const handleSubmit = async (e) => {
     });
 
     // Success handling
-    setCreatedCN(response.data.control_number);
+    setCreatedCN(response.data.control_number);  // Assuming control_number is returned in the response
     setShowQR(true);
+
     // Reset form and state
-    setFormData({ control_number: "", office_requestor: "", destination_office: "", /* reset other fields */ });
+    setFormData({ ...formData, control_number: "" });  // Reset control_number as well
     setFiles([]);
     setUploadPct(0);
     setValidated(false);
-    setFilesError("");
+    setFilesError(""); // Reset any file error messages
+
+    // Show success message
+    alert("Record created successfully!");
 
   } catch (err) {
+    console.error("API Request Error: ", err);  // Log the full error for debugging
     setError("Failed to create record. Please try again later.");
   } finally {
     setSaving(false);
@@ -663,6 +835,11 @@ const closeModal = () => {
   const closePopup = () => {
     setShowQR(false);
   };
+
+
+
+
+
   return (
     <div className="d-flex">
       <Sidebar />
@@ -687,15 +864,28 @@ const closeModal = () => {
                 className="form-control"
                 name="control_number"
                 pattern="[A-Za-z0-9._\-\/]+" 
-                value={formData.control_number}
+                value={controlNumber}
                 onChange={handleChange}
                 placeholder="e.g., 2025-09-001"
                 required
                 autoComplete="off"
+                readOnly
               />
               <div className="invalid-feedback">Control number is required.</div>
               <div className="form-text">Letters, numbers, -, _, /, . allowed</div>
             </div>
+              {/* Day (User Defined) */}
+      <div className="col-md-4">
+        <label className="form-label">Day</label>
+        <input
+          type="number"
+          className="form-control"
+          name="day"
+          value={formData.day}
+          onChange={handleDayChange}
+          placeholder="Enter Day"
+        />
+      </div>
             {/* Office/Requestor */}
             {/* <div className="col-md-6">
               <label className="form-label">Office/ Requestor *</label>
@@ -715,7 +905,8 @@ const closeModal = () => {
             value={formData.office_requestor} 
             onChange={handleChange} 
             options={DESTINATION_OFFICES} 
-            placeholder="Select Office/Requestor" />
+            placeholder="Select Office/Requestor" 
+            required/>
 
             {/* Description */}
             <div className="col-12">
@@ -736,44 +927,64 @@ const closeModal = () => {
               <div className="invalid-feedback">This field is required.</div>
             </div> */}
              
-            <AutocompleteInput label="Classification" name="classification" value={formData.classification} onChange={handleChange} options={CLASSIFICATION_OPTIONS} placeholder="e.g., Academic" />
-            <AutocompleteInput label="Priority" name="priority" value={formData.priority} onChange={handleChange} options={PRIORITY_OPTIONS} placeholder="e.g., Normal" />
+            <AutocompleteInput 
+            label="Classification" 
+            name="classification" 
+            value={formData.classification} 
+            onChange={handleChange} 
+            options={CLASSIFICATION_OPTIONS} 
+            placeholder="e.g., Academic" />
+            <AutocompleteInput 
+            label="Priority" 
+            name="priority" 
+            value={formData.priority} 
+            onChange={handleChange} 
+            options={PRIORITY_OPTIONS} 
+            placeholder="e.g., Normal" />
+
 {/* Retention Period */}
-            <div className="col-md-6">
-              <label className="form-label">Retention Period *</label>
+            {/* <div className="col-md-6">
+              <label className="form-label">Retention Period </label>
               <Select
                 options={RETENTION_OPTIONS}
                 onChange={handleRetentionChange}
                 value={RETENTION_OPTIONS.find(option => option.value === formData.retention_period)}
                 placeholder="Select Retention Period"
                 isSearchable
-                required
+                // required
               />
-            </div>
-<AutocompleteInput 
+            </div> */}
+{/* <AutocompleteInput 
             label="Concerned Personnel" 
             name="concerned_personnel" 
             value={formData.concerned_personnel} 
             onChange={handleChange} 
             options={CONCERNED_PERSONNEL} 
-            placeholder="Select Concerned Personnel" />
+            placeholder="Select Concerned Personnel" /> */}
 
-
+{/* 
             <AutocompleteInput 
             label="Destination Office" 
             name="destination_office" 
             value={formData.destination_office} 
             onChange={handleChange} 
             options={DESTINATION_OFFICES} 
-            placeholder="Select Destination" />
+            placeholder="Select Destination" /> */}
   {/* Remarks */}
-            <div className="col-12">
-              <label className="form-label">Remarks *</label>
-              <textarea className="form-control" name="remarks" rows={2} value={formData.remarks} onChange={handleChange} required></textarea>
+            {/* <div className="col-12">
+              <label className="form-label">Remarks </label>
+              <textarea 
+              className="form-control" 
+              name="remarks" 
+              rows={2} 
+              value={formData.remarks} 
+              onChange={handleChange} 
+              // required
+              ></textarea>
               <div className="invalid-feedback">Remarks are required.</div>
-            </div>
+            </div> */}
             {/* Attachments */}
-            <div className="col-12">
+            {/* <div className="col-12">
               <input ref={fileInputRef} type="file" multiple className="d-none" onChange={handleFilesChange} accept="application/pdf" />
               <div style={dropStyle} onClick={openFileDialog} onDragOver={onDragOver} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDrop={onDrop}>
                 <div className="mb-1 fw-semibold">Drag & drop files here or click to browse</div>
@@ -790,7 +1001,7 @@ const closeModal = () => {
                   ))}
                 </ul>
               )}
-            </div>
+            </div> */}
 {/* {showQR && createdCN && (
   <div>
     <QRCodeCanvas value={createdCN} size={256} />

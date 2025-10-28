@@ -103,6 +103,8 @@ export default function CreateUserForm() {
         >
           <option value="">-- Choose an Office --</option>
           <option>Office of the President</option>
+          <option>Records Office</option>
+
           <option>VP Admin and Finance</option>
           <option>VP Academic Research and Extension</option>
           <option>Office of the Campus Administrator</option>

@@ -259,181 +259,177 @@ import React, { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import axios from "./axios";
-import { socket } from "../socket";
-import "./UserDashboard.css"; // Ensure this file includes the CSS you've shared
-import { useNavigate } from "react-router-dom";
+import "./UserDashboard.css";
 
+const DESTINATION_OFFICES = [
+  "Records Office",
+  "Accounting Office",
+  "Cashier",
+  "Supply Office",
+  "Office of the Budget Officer",
+  "Office of the Chief Administrative Officer- Finance",
+  "PACD",
+  "Marketing",
+  "Office of the Planning Officer",
+  "Office of the Campus Administrator",
+  "Legal Office",
+  "Quality and Assurance Office",
+  "Registrar Office",
+  "Office of the Vice President - Admin and Finance",
+  "Office of the Board Secretary",
+  "Office of the President",
+  "Office of the Alumni",
+  "Human Resource Office",
+  "International Relations Office",
+  "General Servicing Unit",
+  "Planning Management Unit",
+  "Information Technology Office",
+  "Information Office",
+  "Procurement Office",
+  "Office of the Supervising Administrative Officer",
+];
 
 export default function UserDashboard({ user }) {
-  // State declarations
-  const [internalCount, setInternalCount] = useState(0); // Track internal records
-  const [externalCount, setExternalCount] = useState(0); // Track external records
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [nextOffice, setNextOffice] = useState({});
-  const [history, setHistory] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState(null);
-  const [offices, setOffices] = useState([]);
-const navigate = useNavigate();
-  // QR modal state
-  const [showQR, setShowQR] = useState(false);
-  const [qrData, setQrData] = useState({ control_number: "", url: "" });
+  const [offices] = useState(DESTINATION_OFFICES);
 
   const API_BASE =
-    process.env.REACT_APP_API_BASE?.replace(/\/$/, "") || "http://localhost:8081";
+    process.env.REACT_APP_API_BASE?.replace(/\/$/, "") ||
+    "http://localhost:8081";
 
-  // helpers
-  const normalizeQrPath = (p) => {
-    if (!p) return "";
-    return p.startsWith("/uploads/") ? p : `/uploads/${p.replace(/^\/+/, "")}`;
-  };
-
-  const loadOffices = async () => {
-  try {
-    const res = await axios.get("/offices");
-    const raw = Array.isArray(res.data) ? res.data : [];
-    const names = raw.map((x) => (typeof x === "string" ? x : x?.name)).filter(Boolean);
-    const unique = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
-    setOffices(unique);  // Update the offices state
-  } catch (e) {
-    console.error("Failed to load offices", e);
-    setOffices([]);  // Handle error and reset offices
-  }
-};
-
-useEffect(() => {
+  // -------------------- Load Records --------------------
   const reloadRecords = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/records/my-office");
-      const rows = Array.isArray(res.data) ? res.data : [];
+      const token = localStorage.getItem("token");
 
-      console.log("Fetched Records:", rows); // Log the fetched records to check the `document_type`
-
-      // Group rows -> records with files[]
-      const map = new Map();
-      for (const r of rows) {
-        const api_id = r?.id ?? r?.record_id ?? null;
-        const recId = api_id || r?.control_number || Math.random().toString(36).slice(2);
-        if (!map.has(recId)) {
-          map.set(recId, {
-            id: recId,
-            api_id,
-            control_number: r?.control_number || "",
-            title: r?.title || "Untitled",
-            classification: r?.classification || "",
-            priority: r?.priority || "Normal",
-            destination_office: r?.destination_office || "",
-            record_origin: r?.record_origin || "", // Ensure `document_type` is set correctly
-            created_at: r?.created_at || null,
-            description: r?.description || "",
-            qrcode_path: r?.qrcode_path || "",
-            files: [],
-          });
-        }
-        if (r?.file_path) {
-          map.get(recId).files.push({
-            name: r.file_name || (r.file_path ? r.file_path.split("/").pop() : ""),
-            type: r.file_type,
-            size: r.file_size,
-            path: r.file_path,
-            retention_period: r.retention_period,
-          });
-        }
+      if (!token) {
+        alert("You must be logged in to view records.");
+        return;
       }
 
-      const grouped = Array.from(map.values()).sort((a, b) => {
-        const at = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return bt - at;
+      const res = await axios.get(`${API_BASE}/records/my-office`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      setRecords(grouped);
-      setError(null);
 
-      // Check the document_type classification here
-      const internalCount = grouped.filter((r) => {
-        console.log(`Record Origin for ${r.control_number}: ${r.record_origin}`); // Log the document_type for each record
-        return r.record_origin === "internal"; // Filter by correct document type
-      }).length;
+      const rows = Array.isArray(res.data) ? res.data : [];
 
-      const externalCount = grouped.filter((r) => r.record_origin === "external").length;
+      // ✅ Make sure to keep real DB id, not control_number
+      const formatted = rows.map((r) => ({
+        id: r.id, // Use database id
+        control_number: r.control_number,
+        description: r.description || "",
+        destination_office: r.destination_office || "",
+        files: r.files || [],
+      }));
 
-      console.log("Internal Count:", internalCount); // Log the internal count
-      console.log("External Count:", externalCount); // Log the external count
-
-      setInternalCount(internalCount);
-      setExternalCount(externalCount);
-
-    } catch (e) {
-      console.error(e);
-      setError("Failed to load records");
+      setRecords(formatted);
+    } catch (error) {
+      console.error("Error loading records:", error);
+      alert("Failed to load records.");
     } finally {
       setLoading(false);
     }
   };
 
-  reloadRecords();  // Initial load of records
-  loadOffices();    // Load offices data
+  useEffect(() => {
+    reloadRecords();
+  }, []);
 
-  return () => {
-    // Cleanup logic if needed
+  // -------------------- Forward Record --------------------
+  const handleRelease = async (recordId, office) => {
+    if (!office) return alert("Please select a destination office.");
+
+    const ok = window.confirm(
+      `Forward record #${recordId} to ${office}?`
+    );
+    if (!ok) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("You must be logged in to perform this action.");
+        return;
+      }
+
+      await axios.put(
+        `${API_BASE}/records/forward/${recordId}`,
+        { destination_office: office },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      alert(`Record forwarded to ${office}`);
+      // ✅ Remove the record locally to refresh UI
+      setRecords((prev) => prev.filter((r) => r.id !== recordId));
+      setNextOffice((prev) => ({ ...prev, [recordId]: "" }));
+    } catch (error) {
+      console.error("Error forwarding record:", error);
+      alert("Failed to forward record.");
+    }
   };
-}, [user?.office]);  // Re-run effect if user.office changes
 
+  // -------------------- Render --------------------
   return (
     <div className="app-layout">
       <Sidebar />
       <div className="main-content">
         <Navbar />
         <div className="content-area py-8 px-4">
-          <h2 className="page-title text-xl font-bold">Welcome, {user?.name || "User"}</h2>
-          <p className="subtitle text-md text-gray-500">Latest records for {user?.office || "—"}.</p>
+          <h2 className="page-title text-xl font-bold">
+            Welcome, {user?.name || "User"}
+          </h2>
 
+          {/* Dashboard Summary */}
           <div className="dashboard-widgets grid grid-cols-3 gap-4 my-4">
-  <div className="widget p-4 bg-white shadow-lg rounded-lg">
-    <div className="widget-title text-lg font-semibold">Total</div>
-    <div className="widget-value text-3xl font-bold">{records.length}</div>
-  </div>
-  <div className="widget p-4 bg-white shadow-lg rounded-lg">
-    <div className="widget-title text-lg font-semibold">Internal</div>
-    <div className="widget-value text-3xl font-bold">{internalCount}</div>
-  </div>
-  <div className="widget p-4 bg-white shadow-lg rounded-lg">
-    <div className="widget-title text-lg font-semibold">External</div>
-    <div className="widget-value text-3xl font-bold">{externalCount}</div>
-  </div>
-</div>
+            <div className="widget p-4 bg-white shadow-lg rounded-lg">
+              <div className="widget-title text-lg font-semibold">
+                Total Records
+              </div>
+              <div className="widget-value text-3xl font-bold">
+                {records.length}
+              </div>
+            </div>
+          </div>
 
-
-
+          {/* Record List */}
           {loading ? (
             <div className="status text-center text-xl">Loading…</div>
-          ) : error ? (
-            <div className="status text-center text-xl text-red-500">{error}</div>
           ) : records.length === 0 ? (
-            <div className="status text-center text-xl text-gray-500">No documents assigned to your office.</div>
+            <div className="status text-center text-xl text-gray-500">
+              No documents assigned to your office.
+            </div>
           ) : (
             <div className="records-cards">
               {records.map((r) => (
                 <div key={r.id} className="card">
                   <div className="card-header">
                     <h3>{r.control_number || "—"}</h3>
-                    <p>{r.title || "Untitled"}</p>
+                    <p>{r.description || "Untitled"}</p>
                   </div>
+
                   <div className="card-body">
-                    <p><strong>Destination Office:</strong> {r.destination_office || "—"}</p>
-                    <p><strong>Created At:</strong> {r.created_at ? new Date(r.created_at).toLocaleString() : "—"}</p>
+                    <p>
+                      <strong>Destination Office:</strong>{" "}
+                      {r.destination_office || "—"}
+                    </p>
+
                     <div>
                       <strong>Files:</strong>
-                      {r.files.length > 0 ? (
+                      {r.files && r.files.length > 0 ? (
                         r.files.map((file, index) => (
                           <div key={index} className="file-row">
                             <a
-                              href="javascript:void(0)"
+                              href={file.path}
                               className="text-blue-600"
-                              onClick={() => alert(`Opening file: ${file.name}`)}  // Replace with your file opening logic
+                              target="_blank"
+                              rel="noopener noreferrer"
                             >
                               {file.name}
                             </a>
@@ -444,10 +440,37 @@ useEffect(() => {
                       )}
                     </div>
                   </div>
-                  {/* <div className="card-footer">
-                    <button className="btn-approve" onClick={() => alert("Approve record")}>Approve</button>
-                    <button className="btn-notation" onClick={() => navigate("/routing-slip")}>Add Notation</button>
-                  </div> */}
+
+                  {/* Office Selector */}
+                  <div className="card-footer">
+                    <select
+                      value={nextOffice[r.id] || ""}
+                      onChange={(e) =>
+                        setNextOffice({
+                          ...nextOffice,
+                          [r.id]: e.target.value,
+                        })
+                      }
+                      className="form-control"
+                    >
+                      <option value="">Select next office</option>
+                      {offices.map((office) => (
+                        <option key={office} value={office}>
+                          {office}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      className="btn-release"
+                      disabled={!nextOffice[r.id]}
+                      onClick={() =>
+                        handleRelease(r.id, nextOffice[r.id])
+                      }
+                    >
+                      Forward to Next Office
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
