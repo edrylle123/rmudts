@@ -828,7 +828,7 @@ export default function AllRecords() {
                       </td>
                       <td>
                         <div className="d-flex gap-1 flex-wrap">
-                          <button className="btn btn-sm btn-outline-primary" onClick={() => handleEdit(r)}>Edit</button>
+                          {/* <button className="btn btn-sm btn-outline-primary" onClick={() => handleEdit(r)}>Edit</button> */}
                           <button
                             className="btn btn-sm btn-outline-danger"
                             disabled={!r.id || deletingId === r.id}

@@ -67,6 +67,7 @@ export default function Dashboard() {
     concerned_personnel: "",
     destination_office: "",
     retention_period: "1",
+    remarks: "",
   });
 const CLASSIFICATION_OPTIONS = ["Academic", "Administrative", "Financial", "HR", "Others"];
 const PRIORITY_OPTIONS = ["Normal", "Urgent", "Immediate"];
@@ -420,17 +421,6 @@ const CONCERNED_PERSONNEL = [
 
 ];
 
-// const payload = {
-//   control_number: formData.control_number,
-//   office_requestor: formData.office_requestor,
-//   description: formData.description,
-//   classification: formData.classification,
-//   priority: formData.priority,
-//   record_origin: formData.record_origin,
-//   concerned_personnel: formData.concerned_personnel,
-//   destination_office: formData.destination_office,
-//     retention_period: parseInt(formData.retention_period, 10)
-// };
  const [filterType, setFilterType] = useState("All"); // Track filter state
 const [activeOrigin, setActiveOrigin] = useState("");
   const [files, setFiles] = useState([]);
@@ -476,32 +466,41 @@ const [activeOrigin, setActiveOrigin] = useState("");
   const ensureInList = (value, list) => list.some(opt => opt.toLowerCase() === value.trim().toLowerCase());
   
   const navigate = useNavigate();
+const fetchRecordWithHistory = async (recordId) => {
+  try {
+    const res = await axios.get(`http://localhost:8081/records/${recordId}`);
+    setRecord(res.data); // Store record with history in state
+  } catch (error) {
+    console.error("Error fetching record with history:", error);
+  }
+};
 
-  // Function to load records
-  const load = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get("/records/my-office");
-      setRowsRaw(Array.isArray(res.data) ? res.data : []);
-      setError(null);
-    } catch (e) {
-      console.error("Load records error:", e?.response?.data || e.message);
-      if (e?.response?.status === 401 || e?.response?.status === 403) {
-        setError("Session expired or unauthorized. Please log in again.");
-      } else {
-        setError("Failed to load records");
-      }
-    } finally {
-      setLoading(false);
+// Function to load records
+const load = async () => {
+  try {
+    setLoading(true);
+    const res = await axios.get("/records/my-office");
+    setRowsRaw(Array.isArray(res.data) ? res.data : []);
+    console.log("Fetched Records:", res.data); // Log fetched records
+    setError(null);
+  } catch (e) {
+    console.error("Load records error:", e?.response?.data || e.message);
+    if (e?.response?.status === 401 || e?.response?.status === 403) {
+      setError("Session expired or unauthorized. Please log in again.");
+    } else {
+      setError("Failed to load records");
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
+useEffect(() => {
+  const onUpdated = () => load();
+  socket.on("recordUpdated", onUpdated);
+  load(); // Fetch records initially
 
-  useEffect(() => {
-    const onUpdated = () => load();
-    socket.on("recordUpdated", onUpdated);
-    load();
-    return () => socket.off("recordUpdated", onUpdated);
-  }, []);
+  return () => socket.off("recordUpdated", onUpdated);
+}, []);
 
   // Format date function
   const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
@@ -531,7 +530,7 @@ const [activeOrigin, setActiveOrigin] = useState("");
       concerned_personnel: record.concerned_personnel,
       destination_office: record.destination_office,
       retention_period: record.retention_period,
-
+ current_office: record.current_office || 'Unknown Office',
     });
     setShowModal(true); // Show the modal
   };
@@ -649,7 +648,8 @@ const handleSubmit = async (e) => {
   formDataToSend.append('concerned_personnel', formData.concerned_personnel);
   formDataToSend.append('destination_office', formData.destination_office);
   formDataToSend.append('retention_period', formData.retention_period);
-
+  formDataToSend.append('remarks', formData.remarks || 'No remarks');
+  formDataToSend.append('current_office', formData.current_office || 'Unknown Office');
   // Append the files to FormData if there are any
   files.forEach(file => {
     formDataToSend.append('files', file);
@@ -701,7 +701,7 @@ const handleSubmit = async (e) => {
         map.set(recId, {
           id: recId,
           control_number: r.control_number || "",
-          title: r.title || "",
+          // title: r.title || "",
           classification: r.classification || "",
           priority: r.priority || "Normal",
           office_requestor: r.office_requestor || "",
@@ -710,9 +710,11 @@ const handleSubmit = async (e) => {
           created_at: r.created_at || null,
           description: r.description || "",
           retention_period: r.retention_period || "",
-          concerned_personnel: r.concerned_personnel || "",
+          remarks: r.remarks || "",
+          // concerned_personnel: r.concerned_personnel || "",
           files: [],
           qrcode_path: r.qrcode_path || "",
+          current_office: r.current_office || 'Unknown Office',
         });
       }
       if (r.file_path) {
@@ -726,6 +728,12 @@ const handleSubmit = async (e) => {
       (a, b) => (new Date(b.created_at).getTime() || 0) - (new Date(a.created_at).getTime() || 0)
     );
   }, [rowsRaw]);
+
+
+const [record, setRecord] = useState(null);
+
+
+
 const filtered = useMemo(() => {
   const ql = q.trim().toLowerCase();
   const fromT = fromDate ? new Date(fromDate).setHours(0, 0, 0, 0) : null;
@@ -734,11 +742,11 @@ const filtered = useMemo(() => {
   return records.filter((r) => {
     // Filter by search term
     if (ql && ![r.control_number, r.title, r.classification, r.destination_office, r.record_origin].join(" ").toLowerCase().includes(ql)) return false;
-    
+
     // Filter by office
     if (office !== "All" && r.destination_office !== office) return false;
     if (office !== "All" && r.office_requestor !== office) return false;
-    
+
     // Filter by classification
     if (classification !== "All" && r.classification !== classification) return false;
     if (priority !== "All" && r.priority !== priority) return false;
@@ -749,7 +757,8 @@ const filtered = useMemo(() => {
     if ((fromT && ct < fromT) || (toT && ct > toT)) return false;
 
     // Filter by internal or external records
-    if (filterType !== "All" && r.record_origin !== filterType) return false;
+   if (filterType !== "All" && r.record_origin.toLowerCase() !== filterType.toLowerCase()) return false;
+
 
     return true;
   });
@@ -831,53 +840,44 @@ const officeCount = useMemo(() => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-{/* Display office record counts */}
-{/* <div className="office-records-container mt-4">
-  <h5 className="mb-4">Office Records Overview</h5>
-  <div className="row">
-    {Object.keys(officeCount).map((office) => (
-      <div key={office} className="col-md-4 col-sm-6 mb-4">
-        <div className="office-card p-3 text-center rounded shadow">
-          <h5 className="office-title">{office}</h5>
-          <p className="office-records-count">
-            <strong>{officeCount[office]}</strong> Records
-          </p>
-          <div className="office-card-footer">
-            <button className="btn btn-sm btn-outline-primary">
-              View Records
-            </button>
-          </div>
+
+          {/* Records List */}
+         <div className="record-cards">
+  {filtered.length > 0 ? (
+    filtered.map((record) => (
+      <div key={record.id} className="card record-card">
+        <div className="card-header">
+          <h3>{record.control_number || "No Control Number"}</h3>
+          <p>{record.record_origin || "Untitled"}</p>
+        </div>
+        <div className="card-body">
+          <p><strong>Classification:</strong> {record.classification}</p>
+          <p><strong>Priority:</strong> {record.priority}</p>
+          {/* <p><strong>Destination Office:</strong> {record.destination_office}</p> */}
+         <p><strong>Current Office:</strong> {record.current_office ? record.current_office : "Unknown Office"}</p>  {/* Display Current Office */} 
+         </div>
+           <div>
+    <h5>Document History</h5>
+    <ul>
+      {record.history && record.history.map((entry, index) => (
+        <li key={index}>
+          {entry.office_name} - {entry.action} on {new Date(entry.action_date).toLocaleString()}
+        </li>
+      ))}
+    </ul>
+  </div>
+        <div className="card-footer">
+          <button className="btn btn-outline-primary" onClick={() => handleViewQR(record)}>QR</button>
+          <button className="btn btn-outline-danger" style={{ backgroundColor: "blue" }} onClick={() => handleEdit(record)}>Update</button>
+          <button className="btn btn-outline-danger" style={{ backgroundColor: "red" }} onClick={() => handleDelete(record)}>Delete</button>
         </div>
       </div>
-    ))}
-  </div>
-</div>  */}
-          {/* Records List */}
-          <div className="record-cards">
-            {filtered.length > 0 ? (
-              filtered.map((record) => (
-                <div key={record.id} className="card record-card">
-                  <div className="card-header">
-                    <h3>{record.control_number || "No Control Number"}</h3>
-                    <p>{record.des || "Untitled"}</p>
-                  </div>
-                  <div className="card-body">
-                    <p><strong>Classification:</strong> {record.classification}</p>
-                    <p><strong>Priority:</strong> {record.priority}</p>
-                    <p><strong>Destination Office:</strong> {record.destination_office}</p>
-                    <p><strong>Record Origin:</strong> {record.record_origin}</p>
-                  </div>
-                  <div className="card-footer">
-                    <button className="btn btn-outline-primary" onClick={() => handleViewQR(record)}>QR</button>
-                    <button className="btn btn-outline-danger" style={{ backgroundColor: "blue" }} onClick={() => handleEdit(record)}>Update</button>
-                    <button className="btn btn-outline-danger" style={{ backgroundColor: "red" }} onClick={() => handleDelete(record)}>Delete</button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="status">No records available.</div>
-            )}
-          </div>
+    ))
+  ) : (
+    <div className="status">No records available.</div>
+  )}
+</div>
+
    {showQR && (
             <div className="qr-modal-backdrop" onClick={() => setShowQR(false)}>
               <div className="qr-modal-dialog">
@@ -961,19 +961,6 @@ const officeCount = useMemo(() => {
             ))}
           </select>
         </div>
-
-        {/* <div className="form-group">
-          <label>Concerned Personnel</label>
-          <input
-            type="text"
-            className="form-control"
-            name="concerned_personnel"
-            value={formData.concerned_personnel}
-            onChange={handleChange}
-            required
-          />
-        </div> */}
-
 <div className="form-group" >
   <AutocompleteInput 
   label="Concerned Personnel" 
@@ -983,10 +970,7 @@ const officeCount = useMemo(() => {
   options={CONCERNED_PERSONNEL} 
   placeholder="Select Concerned Personnel" 
 />
-
 </div>
-
-
         <div className="form-group">
           <label>Destination Office</label>
           <select
@@ -1032,6 +1016,18 @@ const officeCount = useMemo(() => {
              disabled
           />
         </div>
+
+        <div className="form-group">
+  <label>Remarks</label>
+  <textarea
+    className="form-control"
+    name="remarks"
+    value={formData.remarks}
+    onChange={handleChange} // Handles updating form data
+    rows={4} // Set number of rows for the textarea
+    placeholder="Add remarks here..."
+  />
+</div>
    {/* Attachments */}
             <div className="col-12">
               <input ref={fileInputRef} type="file" multiple className="d-none" onChange={handleFilesChange} accept="application/pdf" />

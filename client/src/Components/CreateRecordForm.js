@@ -418,6 +418,7 @@ export default function CreateRecordForm() {
     classification: "",
     priority: "",
     description: "",
+    current_office: "",
     // concerned_personnel: "",
     // retention_period: "",
     // destination_office: "",
@@ -440,6 +441,9 @@ export default function CreateRecordForm() {
   const [lastDay, setLastDay] = useState(""); // Track the last day to reset the counter
  const [dayError, setDayError] = useState(""); // To display day-related errors
   const [nextControlNumber, setNextControlNumber] = useState('');
+    const [record, setRecord] = useState(null);
+  const [history, setHistory] = useState([]);
+  
   // ---- handlers
   const handleOriginSwitch = (origin) => {
     setActiveOrigin(origin);
@@ -508,20 +512,19 @@ export default function CreateRecordForm() {
 
 
 useEffect(() => {
-  const fetchNextControlNumber = async () => {
-    try {
-      const recordOrigin = activeOrigin === "Internal" ? "Internal" : "External";  // Determine the origin
-      const response = await axios.get(`http://localhost:8081/next-control-number?recordOrigin=${recordOrigin}`);
-      setControlNumber(response.data.control_number); // Set the control number from backend response
-    } catch (error) {
-      console.error("Error fetching next control number:", error);
-    }
-  };
+  if (!activeOrigin) return; // Don't fetch if origin is not selected
+  axios.get("http://localhost:8081/next-control-number", {
+    params: { origin: activeOrigin }   // Pass the origin to the backend
+  }).then(resp => {
+    console.log("Control Number from Backend:", resp.data.control_number);
+    setControlNumber(resp.data.control_number);  // Update the control number on the frontend
+  }).catch(err => {
+    console.error("Error fetching next control number:", err);
+  });
 
-  if (activeOrigin) {  // Fetch control number when activeOrigin changes (either "Internal" or "External")
-    fetchNextControlNumber();
-  }
-}, [activeOrigin]);  // Dependency array with activeOrigin to trigger the effect when origin changes
+
+
+}, [activeOrigin]);  // Fetch when activeOrigin changes
 
   // Handle the day change and reset sequential number
   const handleDayChange = (e) => {
@@ -750,9 +753,13 @@ useEffect(() => {
 const handleSubmit = async (e) => {
   e.preventDefault();
 
-  // Ensure control number is generated and included in the form data
-  const payload = { ...formData, control_number: controlNumber };
 
+
+
+  
+  // Ensure control number is generated and included in the form data
+  const payload = { ...formData, control_number: controlNumber, current_office: "Office of the President" };
+ console.log("Form Data Sent to Backend:", payload);
   // Reset any previous errors
   setError(null);
   setFilesError("");  // Reset file error message
@@ -801,14 +808,10 @@ const handleSubmit = async (e) => {
     // Success handling
     setCreatedCN(response.data.control_number);  // Assuming control_number is returned in the response
     setShowQR(true);
+  // Reset form data and state
+    resetForm();  // This is where the form gets reset after a successful submission
 
-    // Reset form and state
-    setFormData({ ...formData, control_number: "" });  // Reset control_number as well
-    setFiles([]);
-    setUploadPct(0);
-    setValidated(false);
-    setFilesError(""); // Reset any file error messages
-
+ 
     // Show success message
     alert("Record created successfully!");
 
@@ -819,7 +822,25 @@ const handleSubmit = async (e) => {
     setSaving(false);
   }
 };
-
+const resetForm = () => {
+  setFormData({
+    control_number: "", // Reset the control number as well
+    office_requestor: "",
+    description: "",
+    classification: "",
+    priority: "",
+    record_origin: "",
+    concerned_personnel: "",
+    destination_office: "",
+    retention_period: "1",
+    remarks: "",
+    current_office: "Office of the President", // Or other default value
+  });
+  setFiles([]);  // Clear files
+  setUploadPct(0);  // Reset upload percentage
+  setValidated(false);  // Reset form validation
+  setFilesError(""); // Clear any file-related error messages
+};
   const dropStyle = {
     border: `2px dashed ${filesError ? "#dc3545" : "#999"}`,
     borderRadius: 12,
@@ -864,7 +885,7 @@ const closeModal = () => {
                 className="form-control"
                 name="control_number"
                 pattern="[A-Za-z0-9._\-\/]+" 
-                value={controlNumber}
+                value={controlNumber || ""}
                 onChange={handleChange}
                 placeholder="e.g., 2025-09-001"
                 required
