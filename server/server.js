@@ -48,8 +48,6 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // Max file size 10MB
 });
 
-
-
 const handleFormSubmit = (req, res) => {
   try {
     const {
@@ -126,8 +124,6 @@ const db = mysql.createConnection({
   password: process.env.DB_PASS || "",
   database: process.env.DB_NAME || "records_db",
 });
-
-
 
 // ====== Uploads ======
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -463,8 +459,6 @@ app.post("/refresh-token", (req, res) => {
   });
 });
 
-
-
 app.put("/records/forward/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const { destination_office } = req.body;
@@ -509,40 +503,44 @@ app.put("/records/forward/:id", verifyToken, async (req, res) => {
   });
 });
 
-
 const generateQRCode = (data, filePath) => {
   return new Promise((resolve, reject) => {
     QRCode.toFile(qrCodeFilePath, qrData, (err) => {
-  if (err) {
-    console.error("Error generating QR code:", err);
-  } else {
-    console.log("QR Code saved to:", qrCodeFilePath);
-
-    // Check if the file exists
-    fs.access(qrCodeFilePath, fs.constants.F_OK, (err) => {
       if (err) {
-        console.error("QR code file does not exist after creation:", qrCodeFilePath);
+        console.error("Error generating QR code:", err);
       } else {
-        console.log("QR code file exists:", qrCodeFilePath);
+        console.log("QR Code saved to:", qrCodeFilePath);
+
+        // Check if the file exists
+        fs.access(qrCodeFilePath, fs.constants.F_OK, (err) => {
+          if (err) {
+            console.error(
+              "QR code file does not exist after creation:",
+              qrCodeFilePath
+            );
+          } else {
+            console.log("QR code file exists:", qrCodeFilePath);
+          }
+        });
       }
     });
-  }
-});
   });
 };
-
 
 // In your route, update the path where the QR code is saved
 const saveQRCode = async (recordId) => {
   try {
     // Generate the path where the QR code image will be saved
-    const qrCodeFilePath = path.join(__dirname, 'uploads', `${recordId}.png`);
+    const qrCodeFilePath = path.join(__dirname, "uploads", `${recordId}.png`);
 
     // Log the QR Code path to make sure it's correct
     console.log("QR Code file will be saved at:", qrCodeFilePath);
 
     // Generate the QR code
-    await generateQRCode(`http://localhost:8081/records/${recordId}`, qrCodeFilePath);
+    await generateQRCode(
+      `http://localhost:8081/records/${recordId}`,
+      qrCodeFilePath
+    );
 
     console.log("QR Code saved to:", qrCodeFilePath);
     return qrCodeFilePath;
@@ -551,128 +549,6 @@ const saveQRCode = async (recordId) => {
     throw new Error("Failed to save QR code.");
   }
 };
-app.put(
-  "/records/:id",
-  verifyToken,
-  verifyAdmin,
-  upload.array("files"),
-  async (req, res) => {
-    const { id } = req.params;
-    const {
-      concerned_personnel,
-      destination_office,
-      retention_period,
-      current_office,
-      remarks,
-    } = req.body;
-
-    // Get actor from the authenticated user (if available)
-    const actor = req.user?.name || "Unknown Actor"; // Or use req.user.id or any other field
-
-    // Set default value for current_office if it's missing
-    const finalCurrentOffice = current_office || "Office of the President"; // Default office if not provided
-
-    // Check if any required fields are missing for the update
-    if (
-      !concerned_personnel ||
-      !destination_office ||
-      !retention_period ||
-      !remarks ||
-      !finalCurrentOffice ||
-      !actor
-    ) {
-      return res.status(400).json({ error: "Missing required fields for update" });
-    }
-
-    // SQL query to update only the specified fields
-    const sql = `
-    UPDATE records
-    SET concerned_personnel = ?, destination_office = ?, retention_period = ?, current_office = ?, remarks = ?
-    WHERE id = ?
-  `;
-
-    const values = [
-      concerned_personnel,
-      destination_office,
-      retention_period,
-      finalCurrentOffice,
-      remarks,
-      id,
-    ];
-
-    try {
-      const result = await new Promise((resolve, reject) => {
-        db.query(sql, values, (err, result) => {
-          if (err) {
-            return reject(err); // Reject if there is an error
-          }
-
-          // If no rows were affected, the record wasn't found
-          if (result.affectedRows === 0) {
-            return reject(new Error("Record not found"));
-          }
-
-          resolve(result); // Resolve on success
-        });
-      });
-
-      // After the record is updated, generate the QR code
-      const qrData = `Record ID: ${id}, Retention Period: ${retention_period}`;
-      const qrCodePath = path.join(__dirname, 'uploads', `${id}.png`);  // Absolute path to save the QR code
-
-      // Generate the QR code and save it to the correct path
-      // await generateQRCode(qrData, qrCodePath);  // Pass the absolute path
-      
-
-      console.log("QR Code saved to:", qrCodePath);
-
-      // Optionally, you can save the path of the generated QR code in the database
-      const updateQRCodeSql = `
-      UPDATE records SET qrcode_path = ? WHERE id = ?
-    `;
-      db.query(updateQRCodeSql, [qrCodePath, id], (err, result) => {
-        if (err) {
-          console.error("Error updating QR code path in database:", err);
-        } else {
-          console.log("QR code path updated in database.");
-        }
-      });
-
-      // Proceed with file uploads if any
-      const files = req.files || [];
-      if (files.length > 0) {
-        const filePromises = files.map((file) => {
-          return new Promise((resolve, reject) => {
-            const filePath = `/uploads/${file.filename}`;
-            const fileSql = `
-            INSERT INTO record_files (record_id, file_path, file_name, file_size, file_type)
-            VALUES (?, ?, ?, ?, ?)
-          `;
-            db.query(
-              fileSql,
-              [id, filePath, file.originalname, file.size, file.mimetype],
-              (err, result) => {
-                if (err) {
-                  return reject(err); // Reject if there is an error with file upload
-                }
-                resolve(result); // Resolve on success
-              }
-            );
-          });
-        });
-
-        await Promise.all(filePromises);
-      }
-
-      // Send a successful response after the update and history logging
-      res.json({ success: true, message: "Record updated successfully" });
-    } catch (err) {
-      console.error("Error during record update:", err.message);
-      return res.status(500).json({ error: err.message }); // Send error if something goes wrong
-    }
-  }
-);
-
 // app.put(
 //   "/records/:id",
 //   verifyToken,
@@ -691,11 +567,6 @@ app.put(
 //     // Get actor from the authenticated user (if available)
 //     const actor = req.user?.name || "Unknown Actor"; // Or use req.user.id or any other field
 
-//     // Log the incoming data for debugging purposes
-//     console.log("Request Body:", req.body);
-//     console.log("Actor:", actor); // Log the actor for debugging
-//     console.log("Current Office:", current_office);
-
 //     // Set default value for current_office if it's missing
 //     const finalCurrentOffice = current_office || "Office of the President"; // Default office if not provided
 
@@ -708,9 +579,7 @@ app.put(
 //       !finalCurrentOffice ||
 //       !actor
 //     ) {
-//       return res
-//         .status(400)
-//         .json({ error: "Missing required fields for update" });
+//       return res.status(400).json({ error: "Missing required fields for update" });
 //     }
 
 //     // SQL query to update only the specified fields
@@ -745,52 +614,27 @@ app.put(
 //         });
 //       });
 
-//       // Insert the document movement history
-//       const movementSql = `
-//       INSERT INTO record_movements (record_id, action, from_office, to_office, actor)
-//       VALUES (?, 'RELEASED', ?, ?, ?)
-//     `;
-//       const movementValues = [
-//         id,
-//         finalCurrentOffice,
-//         destination_office,
-//         actor,
-//       ]; // Log the movement
-//       db.query(movementSql, movementValues, (err, movementResult) => {
-//         if (err) {
-//           console.error("Error inserting movement history:", err);
-//         }
-//       });
-
-//       console.log("Record updated:", result);
-//   // Generate QR code
+//       // After the record is updated, generate the QR code
 //       const qrData = `Record ID: ${id}, Retention Period: ${retention_period}`;
-//     const qrCodePath = `/uploads/${id}.png`;
-//       console.log("QR Code Path:", qrCodePath);  // Log the path to ensure it's correct
-      
-// const qrCodeDir = path.dirname(qrCodePath);
-// if (!fs.existsSync(qrCodeDir)) {
-//   fs.mkdirSync(qrCodeDir, { recursive: true });  // Create the directory if it doesn't exist
-// }
-//       QRCode.toFile(`${qrCodePath}`, qrData, (err) => {
-//         if (err) {
-//           console.error("Error generating QR Code:", err);
-//         } else {
-//           console.log("QR Code generated successfully!");
+//       const qrCodePath = path.join(__dirname, 'uploads', `qr_${id}.png`);  // Absolute path to save the QR code
 
-//           // Optionally, you can save the path of the generated QR code in the database
-//           const updateQRCodeSql = `
-//           UPDATE records SET qrcode_path = ? WHERE id = ?
-//         `;
-//           db.query(updateQRCodeSql, [qrCodePath, id], (err, result) => {
-//             if (err) {
-//               console.error("Error updating QR code path in database:", err);
-//             } else {
-//               console.log("QR code path updated in database.");
-//             }
-//           });
+//       // Generate the QR code and save it to the correct path
+//       // await generateQRCode(qrData, qrCodePath);  // Pass the absolute path
+
+//       console.log("QR Code saved to:", qrCodePath);
+
+//       // Optionally, you can save the path of the generated QR code in the database
+//       const updateQRCodeSql = `
+//       UPDATE records SET qrcode_path = ? WHERE id = ?
+//     `;
+//       db.query(updateQRCodeSql, [qrCodePath, id], (err, result) => {
+//         if (err) {
+//           console.error("Error updating QR code path in database:", err);
+//         } else {
+//           console.log("QR code path updated in database.");
 //         }
 //       });
+
 //       // Proceed with file uploads if any
 //       const files = req.files || [];
 //       if (files.length > 0) {
@@ -825,81 +669,142 @@ app.put(
 //     }
 //   }
 // );
+app.put(
+  "/records/:id",
+  verifyToken,
+  verifyAdmin,
+  upload.array("files"),
+  async (req, res) => {
+    const { id } = req.params;
+    const {
+      concerned_personnel,
+      destination_office,
+      retention_period,
+      current_office,
+      remarks,
+    } = req.body;
 
-// app.put("/records/:id", verifyToken, verifyAdmin, upload.array('files'), async (req, res) => {
-//   const { id } = req.params;
-//   const { concerned_personnel, destination_office, retention_period, current_office } = req.body;
+    // Get actor from the authenticated user (if available)
+    const actor = req.user?.name || "Unknown Actor"; // Or use req.user.id or any other field
 
-//   // Log the incoming data for debugging purposes
-//   console.log("Request Body:", req.body);  // Check that current_office is included here
-//   console.log("Current Office:", current_office); // Log current office for debugging
+    // Set default value for current_office if it's missing
+    const finalCurrentOffice = current_office || "Office of the President"; // Default office if not provided
 
-//   // Set default value for current_office if it's missing
-//   const finalCurrentOffice = current_office || "Office of the President";
+    // Check if any required fields are missing for the update
+    if (
+      !concerned_personnel ||
+      !destination_office ||
+      !retention_period ||
+      !remarks ||
+      !finalCurrentOffice ||
+      !actor
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Missing required fields for update" });
+    }
 
-//   // Check if any required fields are missing for the update
-//   if (!concerned_personnel || !destination_office || !retention_period || !finalCurrentOffice) {
-//     return res.status(400).json({ error: "Missing required fields for update" });
-//   }
+    // SQL query to update only the specified fields
+    const sql = `
+    UPDATE records
+    SET concerned_personnel = ?, destination_office = ?, retention_period = ?, current_office = ?, remarks = ?
+    WHERE id = ?
+  `;
 
-//   // SQL query to update only the specified fields
-//   const sql = `
-//     UPDATE records
-//     SET concerned_personnel = ?, destination_office = ?, retention_period = ?, current_office = ?
-//     WHERE id = ?
-//   `;
+    const values = [
+      concerned_personnel,
+      destination_office,
+      retention_period,
+      finalCurrentOffice,
+      remarks,
+      id,
+    ];
 
-//   const values = [concerned_personnel, destination_office, retention_period, finalCurrentOffice, id];
+    try {
+      const result = await new Promise((resolve, reject) => {
+        db.query(sql, values, (err, result) => {
+          if (err) {
+            return reject(err); // Reject if there is an error
+          }
 
-//   try {
-//     const result = await new Promise((resolve, reject) => {
-//       db.query(sql, values, (err, result) => {
-//         if (err) {
-//           return reject(err); // Reject if there is an error
-//         }
+          // If no rows were affected, the record wasn't found
+          if (result.affectedRows === 0) {
+            return reject(new Error("Record not found"));
+          }
 
-//         // If no rows were affected, the record wasn't found
-//         if (result.affectedRows === 0) {
-//           return reject(new Error("Record not found"));
-//         }
+          resolve(result); // Resolve on success
+        });
+      });
 
-//         resolve(result); // Resolve on success
-//       });
-//     });
+      const qrData = `Record ID: ${id}, Retention Period: ${retention_period}`; // Define qrData here
 
-//     console.log("Record updated:", result);  // Confirm that the update was successful
+      const qrCodePath = `/uploads/qr_${id}.png`; // Use a relative path
+      const qrCodeAbsolutePath = path.join(
+        __dirname,
+        "uploads",
+        `qr_${id}.png`
+      ); // Absolute path for saving the file
 
-//     // Proceed with file uploads if any
-//     const files = req.files || [];
-//     if (files.length > 0) {
-//       const filePromises = files.map(file => {
-//         return new Promise((resolve, reject) => {
-//           const filePath = `/uploads/${file.filename}`;
-//           const fileSql = `
-//             INSERT INTO record_files (record_id, file_path, file_name, file_size, file_type)
-//             VALUES (?, ?, ?, ?, ?)
-//           `;
-//           db.query(fileSql, [id, filePath, file.originalname, file.size, file.mimetype], (err, result) => {
-//             if (err) {
-//               return reject(err); // Reject if there is an error with file upload
-//             }
-//             resolve(result); // Resolve on success
-//           });
-//         });
-//       });
+      // Ensure uploads folder exists
+      if (!fs.existsSync(path.join(__dirname, "uploads"))) {
+        fs.mkdirSync(path.join(__dirname, "uploads"), { recursive: true });
+      }
 
-//       await Promise.all(filePromises);
-//     }
+      // Generate the QR code and save it to the correct absolute path
+      QRCode.toFile(qrCodeAbsolutePath, qrData, (err) => {
+        if (err) {
+          console.error("Error generating QR code:", err);
+          return res.status(500).json({ error: "Error generating QR code" });
+        }
+        console.log("QR Code saved to:", qrCodeAbsolutePath);
 
-//     // After everything is successful, send the response
-//     res.json({ success: true, message: "Record updated successfully" });
+        // Update the relative path in the database (which the frontend will use)
+        const updateQRCodeSql = `
+    UPDATE records SET qrcode_path = ? WHERE id = ?
+  `;
+        db.query(updateQRCodeSql, [qrCodePath, id], (err, result) => {
+          if (err) {
+            console.error("Error updating QR code path in database:", err);
+          } else {
+            console.log("QR code path updated in database.");
+          }
+        });
+      });
 
-//   } catch (err) {
-//     console.error("Error during record update:", err.message);
-//     return res.status(500).json({ error: err.message }); // Send error if something goes wrong
-//   }
-// });
+      // Proceed with file uploads if any
+      const files = req.files || [];
+      if (files.length > 0) {
+        const filePromises = files.map((file) => {
+          return new Promise((resolve, reject) => {
+            const filePath = `/uploads/${file.filename}`;
+            const fileSql = `
+              INSERT INTO record_files (record_id, file_path, file_name, file_size, file_type)
+              VALUES (?, ?, ?, ?, ?)
+            `;
+            db.query(
+              fileSql,
+              [id, filePath, file.originalname, file.size, file.mimetype],
+              (err, result) => {
+                if (err) {
+                  return reject(err); // Reject if there is an error with file upload
+                }
+                resolve(result); // Resolve on success
+              }
+            );
+          });
+        });
 
+        await Promise.all(filePromises);
+      }
+
+      // Send a successful response after the update and history logging
+      res.json({ success: true, message: "Record updated successfully" });
+    } catch (err) {
+      console.error("Error during record update:", err.message);
+      return res.status(500).json({ error: err.message }); // Send error if something goes wrong
+    }
+  }
+);
 app.get("/users", verifyToken, verifyAdmin, (req, res) => {
   db.query(
     "SELECT id, name, email, role, idnumber, office FROM users",
@@ -1070,7 +975,6 @@ function queryPromise(sql, params) {
 
 // Endpoint to get the next control number
 
-
 function generateControlNumber(origin, cb) {
   const now = new Date();
   const yy = String(now.getFullYear()).slice(-2); // Last 2 digits of year
@@ -1176,7 +1080,6 @@ app.get("/next-control-number", (req, res) => {
     res.json({ control_number: controlNumber });
   });
 });
-
 
 // app.post("/records", upload.array("files"), async (req, res) => {
 //   try {
@@ -1293,8 +1196,6 @@ app.get("/next-control-number", (req, res) => {
 //   }
 // });
 
-
-
 app.post("/records", upload.array("files"), async (req, res) => {
   try {
     console.log("Incoming Request Data:", req.body); // Log incoming request data
@@ -1322,22 +1223,25 @@ app.post("/records", upload.array("files"), async (req, res) => {
     if (!current_office) missingFields.push("current_office");
 
     if (missingFields.length > 0) {
-      return res
-        .status(400)
-        .json({
-          error: `Missing required fields: ${missingFields.join(", ")}`,
-        });
+      return res.status(400).json({
+        error: `Missing required fields: ${missingFields.join(", ")}`,
+      });
     }
 
     const checkSql = `SELECT * FROM records WHERE control_number = ? AND record_origin = ?`;
     db.query(checkSql, [control_number, record_origin], (err, rows) => {
       if (err) {
-        console.error("Database error while checking for duplicate entry:", err);
+        console.error(
+          "Database error while checking for duplicate entry:",
+          err
+        );
         return res.status(500).json({ error: "Database error" });
       }
 
       if (rows.length > 0) {
-        console.log("Duplicate entry detected for the control number with the same origin.");
+        console.log(
+          "Duplicate entry detected for the control number with the same origin."
+        );
         return res.status(400).json({
           error: `Duplicate entry detected for the control number '${control_number}' with record origin '${record_origin}'.`,
         });
@@ -1377,13 +1281,11 @@ app.post("/records", upload.array("files"), async (req, res) => {
     });
   } catch (error) {
     console.error("Create record failed:", error);
-    res.status(500).json({ error: error.message || "Failed to create record." });
+    res
+      .status(500)
+      .json({ error: error.message || "Failed to create record." });
   }
 });
-
-
-
-
 
 // Records visible to current user (admin = all; user = office only)
 app.get("/records/my-office", verifyToken, (req, res) => {
@@ -1556,7 +1458,9 @@ app.delete("/records/:id", verifyToken, (req, res) => {
   db.query(deleteMovements, [id], (deleteMovementsErr) => {
     if (deleteMovementsErr) {
       console.error("Error deleting related movements:", deleteMovementsErr);
-      return res.status(500).json({ error: "Failed to delete related records." });
+      return res
+        .status(500)
+        .json({ error: "Failed to delete related records." });
     }
 
     // Now, delete the record in the records table

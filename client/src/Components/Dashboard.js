@@ -602,7 +602,7 @@ export default function Dashboard() {
     console.log(`Updating ${name}:`, value); // Add this to track changes
     setFormData((prevState) => ({ ...prevState, [name]: value }));
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -655,7 +655,8 @@ export default function Dashboard() {
   // Handle delete
   const handleDelete = async (r) => {
     if (!r.id) return alert("Cannot delete this record.");
-    if (!window.confirm(`Delete "${r.control_number}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete "${r.control_number}"? This cannot be undone.`))
+      return;
     try {
       setDeletingId(r.id);
       await axios.delete(`/records/${r.id}`);
@@ -669,45 +670,87 @@ export default function Dashboard() {
   };
 
   // Transform rows into records with files grouped
-  const records = useMemo(() => {
-    const map = new Map();
-    for (const r of rowsRaw) {
-      const recId =
-        r.id ?? r.control_number ?? Math.random().toString(36).slice(2);
-      if (!map.has(recId)) {
-        map.set(recId, {
-          id: recId,
-          control_number: r.control_number || "",
-          // title: r.title || "",
-          classification: r.classification || "",
-          priority: r.priority || "Normal",
-          office_requestor: r.office_requestor || "",
-          destination_office: r.destination_office || "",
-          record_origin: r.record_origin || "Unknown",
-          created_at: r.created_at || null,
-          description: r.description || "",
-          retention_period: r.retention_period || "",
-          remarks: r.remarks || "",
-          // concerned_personnel: r.concerned_personnel || "",
-          files: [],
-          qrcode_path: r.qrcode_path || "",
-          current_office: r.current_office || "Unknown Office",
-        });
-      }
-      if (r.file_path) {
-        map.get(recId).files.push({
-          name: r.file_name || r.file_path.split("/").pop(),
-          path: r.file_path,
-        });
-      }
+  // const records = useMemo(() => {
+  //   const map = new Map();
+  //   for (const r of rowsRaw) {
+  //     const recId =
+  //       r.id ?? r.control_number ?? Math.random().toString(36).slice(2);
+  //     if (!map.has(recId)) {
+  //       map.set(recId, {
+  //         id: recId,
+  //         control_number: r.control_number || "",
+  //         // title: r.title || "",
+  //         classification: r.classification || "",
+  //         priority: r.priority || "Normal",
+  //         office_requestor: r.office_requestor || "",
+  //         destination_office: r.destination_office || "",
+  //         record_origin: r.record_origin || "Unknown",
+  //         created_at: r.created_at || null,
+  //         updated_at: r.updated_at || r.created_at, // Include updated_at
+  //         description: r.description || "",
+  //         retention_period: r.retention_period || "",
+  //         remarks: r.remarks || "",
+  //         // concerned_personnel: r.concerned_personnel || "",
+  //         files: [],
+  //         qrcode_path: r.qrcode_path || "",
+  //         current_office: r.current_office || "Unknown Office",
+  //       });
+  //     }
+  //     if (r.file_path) {
+  //       map.get(recId).files.push({
+  //         name: r.file_name || r.file_path.split("/").pop(),
+  //         path: r.file_path,
+  //       });
+  //     }
+  //   }
+  //   return Array.from(map.values()).sort(
+  //     (a, b) =>
+  //       (new Date(b.created_at).getTime() || 0) -
+  //       (new Date(a.created_at).getTime() || 0)
+  //   );
+  // }, [rowsRaw]);
+const records = useMemo(() => {
+  const map = new Map();
+  for (const r of rowsRaw) {
+    const recId = r.id ?? r.control_number ?? Math.random().toString(36).slice(2);
+    if (!map.has(recId)) {
+      map.set(recId, {
+        id: recId,
+        control_number: r.control_number || "",
+        classification: r.classification || "",
+        priority: r.priority || "Normal",
+        office_requestor: r.office_requestor || "",
+        destination_office: r.destination_office || "",
+        record_origin: r.record_origin || "Unknown",
+        created_at: r.created_at || null,
+        updated_at: r.updated_at || r.created_at, // Keep track of both
+        description: r.description || "",
+        retention_period: r.retention_period || "",
+        remarks: r.remarks || "",
+        status: r.qrcode_path ? "Updated" : "Not Updated", // Check if QR code exists
+        files: [],
+        qrcode_path: r.qrcode_path || "",
+        current_office: r.current_office || "Unknown Office",
+      });
     }
-    return Array.from(map.values()).sort(
-      (a, b) =>
-        (new Date(b.created_at).getTime() || 0) -
-        (new Date(a.created_at).getTime() || 0)
-    );
-  }, [rowsRaw]);
+    if (r.file_path) {
+      map.get(recId).files.push({
+        name: r.file_name || r.file_path.split("/").pop(),
+        path: r.file_path,
+      });
+    }
+  }
+  return Array.from(map.values()).sort(
+    (a, b) => (new Date(b.created_at).getTime() || 0) - (new Date(a.created_at).getTime() || 0)
+  );
+}, [rowsRaw]);
+const handleUpdateSuccess = (updatedRecord) => {
+  // Remove the updated record from the dashboard
+  setRowsRaw((prev) => prev.filter((record) => record.id !== updatedRecord.id));
 
+  // Optionally, show a success message
+  alert("Record updated successfully!");
+};
   const [record, setRecord] = useState(null);
 
   const filtered = useMemo(() => {
@@ -777,21 +820,24 @@ export default function Dashboard() {
 
     return counts;
   }, [filtered]);
-const handleViewQR = (r) => {
-  console.log("QR Data:", r);
-  if (!r.qrcode_path) return alert("QR code not available for this record.");
-  
-  // Set the QR data based on the qrcode_path that was saved
-  setQrData({
-    control_number: r.control_number,
-    title: r.title,
-    // Use the saved qrcode_path to display the QR image
-    url: r.qrcode_path.replace("C:\\code\\rmudts\\server\\uploads\\", "/uploads/"),
-  });
+  const handleViewQR = (r) => {
+    console.log("QR Data:", r);
+    if (!r.qrcode_path) return alert("QR code not available for this record.");
 
-  setCreatedCN(r.control_number);  // Ensure this sets the correct control number
-  setShowQR(true);
-};
+    // Set the QR data based on the qrcode_path that was saved
+    setQrData({
+      control_number: r.control_number,
+      title: r.title,
+      // Use the saved qrcode_path to display the QR image
+      url: r.qrcode_path.replace(
+        "C:\\code\\rmudts\\server\\uploads\\",
+        "/uploads/"
+      ),
+    });
+
+    setCreatedCN(r.control_number); // Ensure this sets the correct control number
+    setShowQR(true);
+  };
 
   const chartData = useMemo(() => {
     return Object.keys(officeCount).map((office) => ({
@@ -856,86 +902,111 @@ const handleViewQR = (r) => {
           </div>
 
           {/* Records List */}
-          <div className="record-cards">
-            {filtered.length > 0 ? (
-              filtered.map((record) => (
-                <div key={record.id} className="card record-card">
-                  <div className="card-header">
-                    <h3>{record.control_number || "No Control Number"}</h3>
-                    <p>{record.record_origin || "Untitled"}</p>
-                  </div>
-                  <div className="card-body">
-                    <p>
-                      <strong>Classification:</strong> {record.classification}
-                    </p>
-                    <p>
-                      <strong>Priority:</strong> {record.priority}
-                    </p>
-                    {/* <p><strong>Destination Office:</strong> {record.destination_office}</p> */}
-                    <p>
-                      <strong>Current Office:</strong>{" "}
-                      {record.current_office
-                        ? record.current_office
-                        : "Unknown Office"}
-                    </p>{" "}
-                    {/* Display Current Office */}
-                  </div>
-                  <div>
-                    <h5>Document History</h5>
-                    <ul>
-                      {record.history &&
-                        record.history.map((entry, index) => (
-                          <li key={index}>
-                            {entry.office_name} - {entry.action} on{" "}
-                            {new Date(entry.action_date).toLocaleString()}
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                  <div className="card-footer">
-                    <button
-                      className="btn btn-outline-primary"
-                      onClick={() => handleViewQR(record)}
-                    >
-                      QR
-                    </button>
-                    <button
-                      className="btn btn-outline-danger"
-                      style={{ backgroundColor: "blue" }}
-                      onClick={() => handleEdit(record)}
-                    >
-                      Update
-                    </button>
-                    <button
-                      className="btn btn-outline-danger"
-                      style={{ backgroundColor: "red" }}
-                      onClick={() => handleDelete(record)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="status">No records available.</div>
-            )}
-          </div>
-                          {showQR && (
-  <div className="qr-modal-backdrop" onClick={closeModal}>
-    <div className="qr-modal-dialog" onClick={(e) => e.stopPropagation()}>
-      <h5>QR Code for {qrData.control_number}</h5>
-      {/* Ensure the correct URL is used to display the image */}
-      <img src={`http://localhost:8081${qrData.url}`} alt={`QR Code for ${qrData.control_number}`} />
+          {/* <div className="record-cards">
+  {filtered.length > 0 ? (
+    filtered.map((record) => (
+      <div key={record.id} className="card record-card">
+        <div className="card-header">
+          <h3>{record.control_number || "No Control Number"}</h3>
+          <p>{record.record_origin || "Untitled"}</p>
+         
+          <span
+            className={`badge ${new Date(record.created_at).getTime() !== new Date(record.updated_at).getTime() ? 'badge-warning' : 'badge-success'}`}
+          >
+            {new Date(record.created_at).getTime() !== new Date(record.updated_at).getTime() ? 'Updated' : 'Unchanged'}
+          </span>
+        </div>
+        <div className="card-body">
+          <p><strong>Classification:</strong> {record.classification}</p>
+          <p><strong>Priority:</strong> {record.priority}</p>
+          <p><strong>Current Office:</strong> {record.current_office || "Unknown Office"}</p>
+        </div>
 
-      <button
-        className="btn btn-sm btn-outline-secondary mt-2"
-        onClick={closeModal} // Close the modal
-      >
-        Close
-      </button>
-    </div>
-  </div>
-)}
+        <div className="card-footer">
+          <button className="btn btn-outline-primary" onClick={() => handleViewQR(record)}>
+            QR
+          </button>
+          <button className="btn btn-outline-danger" onClick={() => handleEdit(record)}>
+            Update
+          </button>
+          <button className="btn btn-outline-danger" onClick={() => handleDelete(record)}>
+            Delete
+          </button>
+        </div>
+      </div>
+    ))
+  ) : (
+    <div className="status">No records available.</div>
+  )}
+</div> */}
+<div className="record-cards">
+  {filtered.length > 0 ? (
+    filtered.map((record) => (
+      <div key={record.id} className="card record-card">
+        <div className="card-header">
+          <h3>{record.control_number || "No Control Number"}</h3>
+          <p>{record.record_origin || "Untitled"}</p>
+          {/* Display status */}
+          <span
+            className={`badge ${record.status === 'Updated' ? 'badge-success' : 'badge-warning'}`}
+          >
+            {record.status} {/* Display "Updated" or "Not Updated" */}
+          </span>
+        </div>
+        <div className="card-body">
+          <p><strong>Classification:</strong> {record.classification}</p>
+          <p><strong>Priority:</strong> {record.priority}</p>
+          <p><strong>Current Office:</strong> {record.current_office || "Unknown Office"}</p>
+        </div>
+        <div className="card-footer">
+          <button
+            className="btn btn-outline-primary"
+            onClick={() => handleViewQR(record)}
+          >
+            QR
+          </button>
+          <button
+            className="btn btn-outline-danger"
+            onClick={() => handleEdit(record)}
+          >
+            Update
+          </button>
+          <button
+            className="btn btn-outline-danger"
+            onClick={() => handleDelete(record)}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ))
+  ) : (
+    <div className="status">No records available.</div>
+  )}
+</div>
+
+          {showQR && (
+            <div className="qr-modal-backdrop" onClick={closeModal}>
+              <div
+                className="qr-modal-dialog"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h5>QR Code for {qrData.control_number}</h5>
+                {/* Ensure the correct URL is used to display the image */}
+                <img
+                  src={`http://localhost:8081${qrData.url}`}
+                  alt={`QR Code for ${qrData.control_number}`}
+                />
+
+                <button
+                  className="btn btn-sm btn-outline-secondary mt-2"
+                  onClick={closeModal} // Close the modal
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
           {/* Edit Modal */}
 
           {showModal && selectedRecord && (
@@ -1123,9 +1194,8 @@ const handleViewQR = (r) => {
                         ))}
                       </ul>
                     )}
-                    
                   </div>
-   
+
                   <br />
                   <button
                     type="submit"
@@ -1144,11 +1214,7 @@ const handleViewQR = (r) => {
                   >
                     Close
                   </button>
-
                 </form>
-  
-
-
               </div>
             </div>
           )}

@@ -371,3 +371,10 @@ h2 {
 .modal-dialog .btn-secondary {
   margin-right: 10px;
 }
+.badge-warning {
+  background-color: #ff0000; /* Yellow for updated records */
+}
+
+.badge-success {
+  background-color: #28a745; /* Green for unchanged records */
+}
