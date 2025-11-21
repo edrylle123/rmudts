@@ -459,17 +459,59 @@ app.post("/refresh-token", (req, res) => {
   });
 });
 
+// app.put("/records/forward/:id", verifyToken, async (req, res) => {
+//   const { id } = req.params;
+//   const { destination_office } = req.body;
+
+//   if (!destination_office) {
+//     return res.status(400).json({ error: "Destination office is required" });
+//   }
+
+//   const user = req.user;
+
+//   // Permission check
+//   if (
+//     user.office !== "Office of the President" &&
+//     user.role !== "admin" &&
+//     !user.office.includes("Office")
+//   ) {
+//     return res
+//       .status(403)
+//       .json({ error: "You are not authorized to forward records" });
+//   }
+
+//   const sql = `
+//     UPDATE records
+//     SET destination_office = ?, current_office = ?
+//     WHERE id = ?
+//   `;
+//   db.query(sql, [destination_office, destination_office, id], (err, result) => {
+//     if (err) {
+//       console.error("Error in SQL query:", err);
+//       return res
+//         .status(500)
+//         .json({ error: "Failed to forward record", details: err.message });
+//     }
+
+//     if (result.affectedRows === 0) {
+//       return res.status(404).json({ error: "Record not found" });
+//     }
+
+//     io.emit("recordUpdated", { record_id: id, to_office: destination_office });
+
+//     res.status(200).json({ message: "Record forwarded successfully" });
+//   });
+// });
 app.put("/records/forward/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const { destination_office } = req.body;
+  const user = req.user;
 
   if (!destination_office) {
     return res.status(400).json({ error: "Destination office is required" });
   }
 
-  const user = req.user;
-
-  // Permission check
+  // Permission check (you can customize this based on your app's logic)
   if (
     user.office !== "Office of the President" &&
     user.role !== "admin" &&
@@ -485,7 +527,7 @@ app.put("/records/forward/:id", verifyToken, async (req, res) => {
     SET destination_office = ?, current_office = ?
     WHERE id = ?
   `;
-  db.query(sql, [destination_office, destination_office, id], (err, result) => {
+  db.query(sql, [destination_office, destination_office, id], async (err, result) => {
     if (err) {
       console.error("Error in SQL query:", err);
       return res
@@ -497,11 +539,22 @@ app.put("/records/forward/:id", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "Record not found" });
     }
 
-    io.emit("recordUpdated", { record_id: id, to_office: destination_office });
-
-    res.status(200).json({ message: "Record forwarded successfully" });
+    // Log the record movement (after forwarding)
+    try {
+      await logRecordMovement(
+        id,
+        "FORWARDED", // action
+        req.user.office, // from office
+        destination_office, // to office
+        req.user.name // actor
+      );
+      res.status(200).json({ message: "Record forwarded successfully" });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to log record movement" });
+    }
   });
 });
+
 
 const generateQRCode = (data, filePath) => {
   return new Promise((resolve, reject) => {
@@ -549,126 +602,7 @@ const saveQRCode = async (recordId) => {
     throw new Error("Failed to save QR code.");
   }
 };
-// app.put(
-//   "/records/:id",
-//   verifyToken,
-//   verifyAdmin,
-//   upload.array("files"),
-//   async (req, res) => {
-//     const { id } = req.params;
-//     const {
-//       concerned_personnel,
-//       destination_office,
-//       retention_period,
-//       current_office,
-//       remarks,
-//     } = req.body;
 
-//     // Get actor from the authenticated user (if available)
-//     const actor = req.user?.name || "Unknown Actor"; // Or use req.user.id or any other field
-
-//     // Set default value for current_office if it's missing
-//     const finalCurrentOffice = current_office || "Office of the President"; // Default office if not provided
-
-//     // Check if any required fields are missing for the update
-//     if (
-//       !concerned_personnel ||
-//       !destination_office ||
-//       !retention_period ||
-//       !remarks ||
-//       !finalCurrentOffice ||
-//       !actor
-//     ) {
-//       return res.status(400).json({ error: "Missing required fields for update" });
-//     }
-
-//     // SQL query to update only the specified fields
-//     const sql = `
-//     UPDATE records
-//     SET concerned_personnel = ?, destination_office = ?, retention_period = ?, current_office = ?, remarks = ?
-//     WHERE id = ?
-//   `;
-
-//     const values = [
-//       concerned_personnel,
-//       destination_office,
-//       retention_period,
-//       finalCurrentOffice,
-//       remarks,
-//       id,
-//     ];
-
-//     try {
-//       const result = await new Promise((resolve, reject) => {
-//         db.query(sql, values, (err, result) => {
-//           if (err) {
-//             return reject(err); // Reject if there is an error
-//           }
-
-//           // If no rows were affected, the record wasn't found
-//           if (result.affectedRows === 0) {
-//             return reject(new Error("Record not found"));
-//           }
-
-//           resolve(result); // Resolve on success
-//         });
-//       });
-
-//       // After the record is updated, generate the QR code
-//       const qrData = `Record ID: ${id}, Retention Period: ${retention_period}`;
-//       const qrCodePath = path.join(__dirname, 'uploads', `qr_${id}.png`);  // Absolute path to save the QR code
-
-//       // Generate the QR code and save it to the correct path
-//       // await generateQRCode(qrData, qrCodePath);  // Pass the absolute path
-
-//       console.log("QR Code saved to:", qrCodePath);
-
-//       // Optionally, you can save the path of the generated QR code in the database
-//       const updateQRCodeSql = `
-//       UPDATE records SET qrcode_path = ? WHERE id = ?
-//     `;
-//       db.query(updateQRCodeSql, [qrCodePath, id], (err, result) => {
-//         if (err) {
-//           console.error("Error updating QR code path in database:", err);
-//         } else {
-//           console.log("QR code path updated in database.");
-//         }
-//       });
-
-//       // Proceed with file uploads if any
-//       const files = req.files || [];
-//       if (files.length > 0) {
-//         const filePromises = files.map((file) => {
-//           return new Promise((resolve, reject) => {
-//             const filePath = `/uploads/${file.filename}`;
-//             const fileSql = `
-//             INSERT INTO record_files (record_id, file_path, file_name, file_size, file_type)
-//             VALUES (?, ?, ?, ?, ?)
-//           `;
-//             db.query(
-//               fileSql,
-//               [id, filePath, file.originalname, file.size, file.mimetype],
-//               (err, result) => {
-//                 if (err) {
-//                   return reject(err); // Reject if there is an error with file upload
-//                 }
-//                 resolve(result); // Resolve on success
-//               }
-//             );
-//           });
-//         });
-
-//         await Promise.all(filePromises);
-//       }
-
-//       // Send a successful response after the update and history logging
-//       res.json({ success: true, message: "Record updated successfully" });
-//     } catch (err) {
-//       console.error("Error during record update:", err.message);
-//       return res.status(500).json({ error: err.message }); // Send error if something goes wrong
-//     }
-//   }
-// );
 app.put(
   "/records/:id",
   verifyToken,
@@ -1081,6 +1015,7 @@ app.get("/next-control-number", (req, res) => {
   });
 });
 
+
 // app.post("/records", upload.array("files"), async (req, res) => {
 //   try {
 //     console.log("Incoming Request Data:", req.body); // Log incoming request data
@@ -1093,10 +1028,9 @@ app.get("/next-control-number", (req, res) => {
 //       description,
 //       record_origin,
 //       destination_office,
-//       current_office, // Ensure this field is sent from the frontend or handle default
+//       current_office,
 //     } = req.body;
 
-//     // Check if current_office exists, if not, set it to a default value
 //     const currentOffice = current_office || "Office of the President";
 
 //     const missingFields = [];
@@ -1106,18 +1040,14 @@ app.get("/next-control-number", (req, res) => {
 //     if (!priority) missingFields.push("priority");
 //     if (!description) missingFields.push("description");
 //     if (!destination_office) missingFields.push("destination_office");
-//     if (!current_office) missingFields.push("current_office"); // Missing check for current_office
+//     if (!current_office) missingFields.push("current_office");
 
-//     // If any fields are missing, return the error with details
 //     if (missingFields.length > 0) {
-//       return res
-//         .status(400)
-//         .json({
-//           error: `Missing required fields: ${missingFields.join(", ")}`,
-//         });
+//       return res.status(400).json({
+//         error: `Missing required fields: ${missingFields.join(", ")}`,
+//       });
 //     }
 
-//     // Check for duplicate control number and record origin
 //     const checkSql = `SELECT * FROM records WHERE control_number = ? AND record_origin = ?`;
 //     db.query(checkSql, [control_number, record_origin], (err, rows) => {
 //       if (err) {
@@ -1136,7 +1066,6 @@ app.get("/next-control-number", (req, res) => {
 //           error: `Duplicate entry detected for the control number '${control_number}' with record origin '${record_origin}'.`,
 //         });
 //       } else {
-//         // Proceed with inserting the new record
 //         const insertSql = `
 //           INSERT INTO records
 //           (control_number, office_requestor, classification, priority, description, record_origin, destination_office, current_office)
@@ -1160,30 +1089,12 @@ app.get("/next-control-number", (req, res) => {
 //               return res.status(500).json({ error: "Failed to insert record" });
 //             }
 
-//             // const qrCodeImagePath = path.join(__dirname, 'uploads', `${control_number}.png`);
-//             // QRCode.toFile(qrCodeImagePath, control_number, { width: 512, margin: 1 }, function (err) {
-//             //   if (err) {
-//             //     console.error("Error generating QR code:", err);
-//             //     return res.status(500).json({ error: "Failed to generate QR code" });
-//             //   }
-
-//             //   const updateSql = `
-//             //     UPDATE records SET qrcode_path = ? WHERE id = ?
-//             //   `;
-//             //   db.query(updateSql, ["/uploads/" + `${control_number}.png`, result.insertId], (err) => {
-//             //     if (err) {
-//             //       console.error("Error saving QR code path:", err);
-//             //       return res.status(500).json({ error: "Failed to save QR code path" });
-//             //     }
-
-//             //     res.status(201).json({
-//             //       message: "Record created successfully with QR code.",
-//             //       control_number,
-//             //       recordId: result.insertId,
-//             //       qrcode_path: "/uploads/" + `${control_number}.png`, // Send the QR code path in the response
-//             //     });
-//             //   });
-//             // });
+//             console.log("Record created successfully:", result);
+//             res.status(201).json({
+//               message: "Record created successfully",
+//               control_number,
+//               recordId: result.insertId,
+//             });
 //           }
 //         );
 //       }
@@ -1195,6 +1106,7 @@ app.get("/next-control-number", (req, res) => {
 //       .json({ error: error.message || "Failed to create record." });
 //   }
 // });
+// Function to log record movement
 
 app.post("/records", upload.array("files"), async (req, res) => {
   try {
@@ -1270,10 +1182,29 @@ app.post("/records", upload.array("files"), async (req, res) => {
             }
 
             console.log("Record created successfully:", result);
-            res.status(201).json({
-              message: "Record created successfully",
-              control_number,
-              recordId: result.insertId,
+
+            // Automatically track the record movement to the initial office
+            const recordId = result.insertId; // Get the newly created record's ID
+            const actor = "System"; // Or use req.user.name if using an authenticated user
+            const from_office = "Unknown"; // Default if not provided
+            const to_office = currentOffice;
+
+            const movementSql = `
+              INSERT INTO record_movements (record_id, action, from_office, to_office, actor)
+              VALUES (?, 'CREATED', ?, ?, ?)
+            `;
+            db.query(movementSql, [recordId, from_office, to_office, actor], (err2) => {
+              if (err2) {
+                console.error("Error inserting record movement:", err2);
+                return res.status(500).json({ error: "Failed to log record movement" });
+              }
+
+              console.log("Record movement tracked successfully.");
+              res.status(201).json({
+                message: "Record created and tracked successfully",
+                control_number,
+                recordId,
+              });
             });
           }
         );
@@ -1286,6 +1217,26 @@ app.post("/records", upload.array("files"), async (req, res) => {
       .json({ error: error.message || "Failed to create record." });
   }
 });
+
+
+
+
+const logRecordMovement = (recordId, action, fromOffice, toOffice, actor) => {
+  return new Promise((resolve, reject) => {
+    const sql = `
+      INSERT INTO record_movements (record_id, action, from_office, to_office, actor)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    db.query(sql, [recordId, action, fromOffice, toOffice, actor], (err, result) => {
+      if (err) {
+        console.error("Error inserting record movement:", err);
+        return reject(err); // Reject the promise if error occurs
+      }
+      console.log("Record movement logged successfully.");
+      resolve(result); // Resolve the promise on success
+    });
+  });
+};
 
 // Records visible to current user (admin = all; user = office only)
 app.get("/records/my-office", verifyToken, (req, res) => {
@@ -1383,73 +1334,6 @@ app.get("/records/:id", verifyToken, verifyAdmin, (req, res) => {
   });
 });
 
-// app.get("/records/:id", verifyToken, verifyAdmin, (req, res) => {
-//   const { id } = req.params;
-//   const sql = `
-//     SELECT r.*, rf.file_name, rf.file_type, rf.file_size, rf.file_path, rf.retention_period
-//     FROM records r
-//     LEFT JOIN record_files rf ON r.id = rf.record_id
-//     WHERE r.id = ?
-//   `;
-
-//   db.query(sql, [id], (err, rows) => {
-//     if (err) return res.status(500).json({ error: "Database error" });
-
-//     // Check if record exists
-//     if (!rows || rows.length === 0) {
-//       return res.status(404).json({ error: "Record not found" });
-//     }
-
-//     const record = rows[0]; // First record in the response
-//     res.json({
-//       id: record.id,
-//       control_number: record.control_number,
-//       office_requestor: record.office_requestor,
-//       classification: record.classification,
-//       priority: record.priority,
-//       description: record.description,
-//       retention_period: record.retention_period,
-//       concerned_personnel: record.concerned_personnel,
-//       destination_office: record.destination_office,
-//       record_origin: record.record_origin, // Non-editable
-//       files: rows.map(r => ({
-//         name: r.file_name,
-//         path: r.file_path,
-//         type: r.file_type,
-//         size: r.file_size
-//       })),
-//     });
-//   });
-// });
-
-// DELETE record (+ files)
-// app.delete("/records/:id", verifyToken, (req, res) => {
-//   const { id } = req.params;
-//   const sel = "SELECT file_path FROM record_files WHERE record_id = ?";
-//   db.query(sel, [id], (selErr, rows) => {
-//     if (selErr) return res.status(500).json({ error: selErr.message });
-
-//     const delFiles = "DELETE FROM record_files WHERE record_id = ?";
-//     const delRec = "DELETE FROM records WHERE id = ?";
-
-//     db.query(delFiles, [id], (dfErr) => {
-//       if (dfErr) return res.status(500).json({ error: dfErr.message });
-//       db.query(delRec, [id], (drErr, result) => {
-//         if (drErr) return res.status(500).json({ error: drErr.message });
-//         if (result.affectedRows === 0)
-//           return res.status(404).json({ error: "Record not found" });
-
-//         (rows || []).forEach((r) => {
-//           if (r.file_path && r.file_path.startsWith("/uploads/")) {
-//             const abs = path.join(__dirname, r.file_path);
-//             fs.unlink(abs, () => {});
-//           }
-//         });
-//         res.json({ success: true, message: "Record and files deleted" });
-//       });
-//     });
-//   });
-// });
 app.delete("/records/:id", verifyToken, (req, res) => {
   const { id } = req.params;
 
@@ -1513,28 +1397,35 @@ app.get("/api/tracking/history/:id", verifyToken, (req, res) => {
 });
 
 // Release
-app.post("/api/tracking/release", verifyToken, (req, res) => {
-  const { record_id, to_office } = req.body;
-  const from_office = req.user?.office || "Unknown";
-  const actor = req.user?.name || "System";
+app.post("/api/tracking/receive", verifyToken, (req, res) => {
+  const { record_id, from_office } = req.body;
+  const actor = req.user.name;
 
-  const sql = `
-    INSERT INTO record_movements (record_id, action, from_office, to_office, actor)
-    VALUES (?, 'RELEASED', ?, ?, ?)
-  `;
-  db.query(sql, [record_id, from_office, to_office, actor], (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+  db.query(
+    "UPDATE records SET status='IN_OFFICE', destination_office=? WHERE id=?",
+    [req.user.office, record_id],
+    (err) => {
+      if (err) return res.status(500).json({ message: err.message });
 
-    db.query("UPDATE records SET destination_office = ? WHERE id = ?", [
-      to_office,
-      record_id,
-    ]);
+      db.query(
+        "INSERT INTO record_movements (record_id, action, from_office, to_office, actor) VALUES (?, 'RECEIVED', ?, ?, ?)",
+        [record_id, from_office, req.user.office, actor],
+        (err2) => {
+          if (err2) return res.status(500).json({ message: err2.message });
 
-    const io = req.app.get("io");
-    io.emit("recordUpdated", { record_id, to_office, from_office, actor });
+          const io = req.app.get("io");
+          io.emit("recordUpdated", {
+            record_id,
+            to_office: req.user.office,
+            from_office,
+            actor,
+          });
 
-    res.json({ success: true, message: "Record released successfully" });
-  });
+          res.json({ message: "Document received successfully" });
+        }
+      );
+    }
+  );
 });
 
 // Fetched records from DB, ensuring document_origin is aliased as document_type
@@ -1597,36 +1488,36 @@ app.get("/records/total-per-office", verifyToken, (req, res) => {
   });
 });
 
-app.post("/api/tracking/receive", verifyToken, (req, res) => {
-  const { record_id, from_office } = req.body;
-  const actor = req.user.name;
+// app.post("/api/tracking/receive", verifyToken, (req, res) => {
+//   const { record_id, from_office } = req.body;
+//   const actor = req.user.name;
 
-  db.query(
-    "UPDATE records SET status='IN_OFFICE', destination_office=? WHERE id=?",
-    [req.user.office, record_id],
-    (err) => {
-      if (err) return res.status(500).json({ message: err.message });
+//   db.query(
+//     "UPDATE records SET status='IN_OFFICE', destination_office=? WHERE id=?",
+//     [req.user.office, record_id],
+//     (err) => {
+//       if (err) return res.status(500).json({ message: err.message });
 
-      db.query(
-        "INSERT INTO record_movements (record_id, action, from_office, to_office, actor) VALUES (?, 'RECEIVED', ?, ?, ?)",
-        [record_id, from_office, req.user.office, actor],
-        (err2) => {
-          if (err2) return res.status(500).json({ message: err2.message });
+//       db.query(
+//         "INSERT INTO record_movements (record_id, action, from_office, to_office, actor) VALUES (?, 'RECEIVED', ?, ?, ?)",
+//         [record_id, from_office, req.user.office, actor],
+//         (err2) => {
+//           if (err2) return res.status(500).json({ message: err2.message });
 
-          const io = req.app.get("io");
-          io.emit("recordUpdated", {
-            record_id,
-            to_office: req.user.office,
-            from_office,
-            actor,
-          });
+//           const io = req.app.get("io");
+//           io.emit("recordUpdated", {
+//             record_id,
+//             to_office: req.user.office,
+//             from_office,
+//             actor,
+//           });
 
-          res.json({ message: "Document received successfully" });
-        }
-      );
-    }
-  );
-});
+//           res.json({ message: "Document received successfully" });
+//         }
+//       );
+//     }
+//   );
+// });
 app.post("/records/move", verifyToken, async (req, res) => {
   try {
     const { record_id, from_office, to_office, actor } = req.body;
@@ -1695,6 +1586,56 @@ app.get("/api/tracking/my-office", verifyToken, (req, res) => {
     res.json(rows);
   });
 });
+// Route to track the record's current location
+// Route to track the record's current location based on control number
+app.get("/records/track/:control_number", verifyToken, async (req, res) => {
+  const { control_number } = req.params;
+
+  try {
+    // Query to get the most recent record movement for the given control number
+    const sql = `
+      SELECT rm.*, u.name AS actor_name
+      FROM record_movements rm
+      LEFT JOIN users u ON rm.actor = u.id
+      WHERE rm.record_id = (
+        SELECT id FROM records WHERE control_number = ? LIMIT 1
+      )
+      ORDER BY rm.timestamp DESC
+      LIMIT 1
+    `;
+
+    db.query(sql, [control_number], (err, rows) => {
+      if (err) {
+        console.error("Error fetching record movement:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      if (rows.length === 0) {
+        return res.status(404).json({ error: "Record not found or no movements found" });
+      }
+
+      const latestMovement = rows[0];
+
+      res.json({
+        control_number,
+        current_office: latestMovement.to_office,  // Current office is where it's last moved to
+        history: rows.map(movement => ({
+          action: movement.action,
+          from_office: movement.from_office,
+          to_office: movement.to_office,
+          actor: movement.actor_name,
+          timestamp: movement.timestamp
+        }))
+      });
+    });
+  } catch (err) {
+    console.error("Error while tracking record:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+
 
 // ====== Start ======
 const PORT = process.env.PORT || 8081;

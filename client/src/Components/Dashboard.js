@@ -709,48 +709,53 @@ export default function Dashboard() {
   //       (new Date(a.created_at).getTime() || 0)
   //   );
   // }, [rowsRaw]);
-const records = useMemo(() => {
-  const map = new Map();
-  for (const r of rowsRaw) {
-    const recId = r.id ?? r.control_number ?? Math.random().toString(36).slice(2);
-    if (!map.has(recId)) {
-      map.set(recId, {
-        id: recId,
-        control_number: r.control_number || "",
-        classification: r.classification || "",
-        priority: r.priority || "Normal",
-        office_requestor: r.office_requestor || "",
-        destination_office: r.destination_office || "",
-        record_origin: r.record_origin || "Unknown",
-        created_at: r.created_at || null,
-        updated_at: r.updated_at || r.created_at, // Keep track of both
-        description: r.description || "",
-        retention_period: r.retention_period || "",
-        remarks: r.remarks || "",
-        status: r.qrcode_path ? "Updated" : "Not Updated", // Check if QR code exists
-        files: [],
-        qrcode_path: r.qrcode_path || "",
-        current_office: r.current_office || "Unknown Office",
-      });
+  const records = useMemo(() => {
+    const map = new Map();
+    for (const r of rowsRaw) {
+      const recId =
+        r.id ?? r.control_number ?? Math.random().toString(36).slice(2);
+      if (!map.has(recId)) {
+        map.set(recId, {
+          id: recId,
+          control_number: r.control_number || "",
+          classification: r.classification || "",
+          priority: r.priority || "Normal",
+          office_requestor: r.office_requestor || "",
+          destination_office: r.destination_office || "",
+          record_origin: r.record_origin || "Unknown",
+          created_at: r.created_at || null,
+          updated_at: r.updated_at || r.created_at, // Keep track of both
+          description: r.description || "",
+          retention_period: r.retention_period || "",
+          remarks: r.remarks || "",
+          status: r.qrcode_path ? "Updated" : "Not Updated", // Check if QR code exists
+          files: [],
+          qrcode_path: r.qrcode_path || "",
+          current_office: r.current_office || "Unknown Office",
+        });
+      }
+      if (r.file_path) {
+        map.get(recId).files.push({
+          name: r.file_name || r.file_path.split("/").pop(),
+          path: r.file_path,
+        });
+      }
     }
-    if (r.file_path) {
-      map.get(recId).files.push({
-        name: r.file_name || r.file_path.split("/").pop(),
-        path: r.file_path,
-      });
-    }
-  }
-  return Array.from(map.values()).sort(
-    (a, b) => (new Date(b.created_at).getTime() || 0) - (new Date(a.created_at).getTime() || 0)
-  );
-}, [rowsRaw]);
-const handleUpdateSuccess = (updatedRecord) => {
-  // Remove the updated record from the dashboard
-  setRowsRaw((prev) => prev.filter((record) => record.id !== updatedRecord.id));
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        (new Date(b.created_at).getTime() || 0) -
+        (new Date(a.created_at).getTime() || 0)
+    );
+  }, [rowsRaw]);
+  const handleUpdateSuccess = (updatedRecord) => {
+    // Remove the updated record from the dashboard
+    setRowsRaw((prev) =>
+      prev.filter((record) => record.id !== updatedRecord.id)
+    );
 
-  // Optionally, show a success message
-  alert("Record updated successfully!");
-};
+    // Optionally, show a success message
+    alert("Record updated successfully!");
+  };
   const [record, setRecord] = useState(null);
 
   const filtered = useMemo(() => {
@@ -863,21 +868,56 @@ const handleUpdateSuccess = (updatedRecord) => {
               Showing <strong>{filtered.length}</strong> of {records.length}
             </div>
           </div>
-          <div className="d-flex justify-content-between">
-            <label htmlFor="recordFilter" className="form-label">
-              Filter by Record Type
-            </label>
-            <select
-              id="recordFilter"
-              className="form-select"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-            >
-              <option value="All">All</option>
-              <option value="internal">Internal</option>
-              <option value="external">External</option>
-            </select>
+          <div className="d-flex justify-content-between align-items-center">
+            <div className="d-flex align-items-center">
+              <label htmlFor="recordFilter" className="form-label mr-2">
+                Filter by Record Type
+              </label>
+              <select
+                id="recordFilter"
+                className="form-select"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+              >
+                <option value="All">All</option>
+                <option value="internal">Internal</option>
+                <option value="external">External</option>
+              </select>
+            </div>
+
+            <div className="d-flex align-items-center">
+              <label htmlFor="officeFilter" className="form-label mr-2">
+                Filter by Office
+              </label>
+              <select
+                id="officeFilter"
+                className="form-select"
+                value={office}
+                onChange={(e) => setOffice(e.target.value)}
+              >
+                <option value="All">All Offices</option>
+                {DESTINATION_OFFICES.map((office, index) => (
+                  <option key={index} value={office}>
+                    {office}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="d-flex align-items-center">
+              <label htmlFor="dateFilter" className="form-label mr-2">
+                Filter by Date
+              </label>
+              <input
+                type="date"
+                id="dateFilter"
+                className="form-control"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
+            </div>
           </div>
+
           <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
             <div className="text-muted small">
               Showing <strong>{filtered.length}</strong> of {rowsRaw.length}
@@ -901,89 +941,62 @@ const handleUpdateSuccess = (updatedRecord) => {
             </ResponsiveContainer>
           </div>
 
-          {/* Records List */}
-          {/* <div className="record-cards">
-  {filtered.length > 0 ? (
-    filtered.map((record) => (
-      <div key={record.id} className="card record-card">
-        <div className="card-header">
-          <h3>{record.control_number || "No Control Number"}</h3>
-          <p>{record.record_origin || "Untitled"}</p>
-         
-          <span
-            className={`badge ${new Date(record.created_at).getTime() !== new Date(record.updated_at).getTime() ? 'badge-warning' : 'badge-success'}`}
-          >
-            {new Date(record.created_at).getTime() !== new Date(record.updated_at).getTime() ? 'Updated' : 'Unchanged'}
-          </span>
-        </div>
-        <div className="card-body">
-          <p><strong>Classification:</strong> {record.classification}</p>
-          <p><strong>Priority:</strong> {record.priority}</p>
-          <p><strong>Current Office:</strong> {record.current_office || "Unknown Office"}</p>
-        </div>
-
-        <div className="card-footer">
-          <button className="btn btn-outline-primary" onClick={() => handleViewQR(record)}>
-            QR
-          </button>
-          <button className="btn btn-outline-danger" onClick={() => handleEdit(record)}>
-            Update
-          </button>
-          <button className="btn btn-outline-danger" onClick={() => handleDelete(record)}>
-            Delete
-          </button>
-        </div>
-      </div>
-    ))
-  ) : (
-    <div className="status">No records available.</div>
-  )}
-</div> */}
-<div className="record-cards">
-  {filtered.length > 0 ? (
-    filtered.map((record) => (
-      <div key={record.id} className="card record-card">
-        <div className="card-header">
-          <h3>{record.control_number || "No Control Number"}</h3>
-          <p>{record.record_origin || "Untitled"}</p>
-          {/* Display status */}
-          <span
-            className={`badge ${record.status === 'Updated' ? 'badge-success' : 'badge-warning'}`}
-          >
-            {record.status} {/* Display "Updated" or "Not Updated" */}
-          </span>
-        </div>
-        <div className="card-body">
-          <p><strong>Classification:</strong> {record.classification}</p>
-          <p><strong>Priority:</strong> {record.priority}</p>
-          <p><strong>Current Office:</strong> {record.current_office || "Unknown Office"}</p>
-        </div>
-        <div className="card-footer">
-          <button
-            className="btn btn-outline-primary"
-            onClick={() => handleViewQR(record)}
-          >
-            QR
-          </button>
-          <button
-            className="btn btn-outline-danger"
-            onClick={() => handleEdit(record)}
-          >
-            Update
-          </button>
-          <button
-            className="btn btn-outline-danger"
-            onClick={() => handleDelete(record)}
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    ))
-  ) : (
-    <div className="status">No records available.</div>
-  )}
-</div>
+          <div className="record-cards">
+            {filtered.length > 0 ? (
+              filtered.map((record) => (
+                <div key={record.id} className="card record-card">
+                  <div className="card-header">
+                    <h3>{record.control_number || "No Control Number"}</h3>
+                    <p>{record.record_origin || "Untitled"}</p>
+                    {/* Display status */}
+                    <span
+                      className={`badge ${
+                        record.status === "Updated"
+                          ? "badge-success"
+                          : "badge-warning"
+                      }`}
+                    >
+                      {record.status} {/* Display "Updated" or "Not Updated" */}
+                    </span>
+                  </div>
+                  <div className="card-body">
+                    <p>
+                      <strong>Classification:</strong> {record.classification}
+                    </p>
+                    <p>
+                      <strong>Priority:</strong> {record.priority}
+                    </p>
+                    <p>
+                      <strong>Current Office:</strong>{" "}
+                      {record.current_office || "Unknown Office"}
+                    </p>
+                  </div>
+                  <div className="card-footer">
+                    <button
+                      className="btn btn-outline-primary"
+                      onClick={() => handleViewQR(record)}
+                    >
+                      QR
+                    </button>
+                    <button
+                      className="btn btn-outline-danger"
+                      onClick={() => handleEdit(record)}
+                    >
+                      Update
+                    </button>
+                    <button
+                      className="btn btn-outline-danger"
+                      onClick={() => handleDelete(record)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="status">No records available.</div>
+            )}
+          </div>
 
           {showQR && (
             <div className="qr-modal-backdrop" onClick={closeModal}>

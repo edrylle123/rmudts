@@ -1,156 +1,21 @@
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+
+.d-flex {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
+  justify-content: flex-start; /* Align content to the left */
+  align-items: flex-start; /* Align items at the top of the container */
 }
 
 
-.modal-content {
-  background-color: rgb(233, 224, 224);
-  padding: 20px;
-  border-radius: 5px;
-  max-width: 600px;
-  width: 100%;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-/* Modal header styling */
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-footer {
-  text-align: right;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  color: red;
-}
-
-.close-btn:hover {
-  background-color: #d32f2f;
-}
-/* AppLayout.css */
-
-.app-layout {
-  display: flex;
-}
-
-.main-content {
-  flex-grow: 1;
-  padding: 20px;
-}
-
-h2 {
-  font-size: 2rem;
-  font-weight: bold;
-}
-
-.status {
-  text-align: center;
-  font-size: 1.2rem;
-  margin: 20px 0;
-}
-
-.status.error {
-  color: red;
-}
-
-.dashboard-widgets {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-.widget {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  width: 30%;
-  text-align: center;
-}
-
-.widget h3 {
-  font-size: 1.5rem;
-  margin-bottom: 10px;
-}
-
-.widget p {
-  font-size: 1.2rem;
+/* General Styles */
+.delete {
+  color: white;
+  background-color: rgba(140, 9, 9, 0.87);
 }
 
 .record-cards {
-  margin-top: 40px;
-}
-
-.cards-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 20px;
-}
-
-.card {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.card:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-}
-
-.card h3 {
-  font-size: 1.4rem;
-  color: #007bff;
-  margin-bottom: 10px;
-}
-
-.card p {
-  font-size: 1.1rem;
-  color: #555;
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-  .dashboard-widgets {
-    flex-direction: column;
-  }
-
-  .widget {
-    width: 100%;
-  }
-
-  .cards-container {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 480px) {
-  .cards-container {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Dashboard.css */
-.record-cards {
   margin-top: 20px;
 }
 
@@ -161,33 +26,45 @@ h2 {
 }
 
 .card {
-  width: 300px;
+  width: 250px;
   border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   padding: 15px;
-  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
 }
 
 .card-header h3 {
-  font-size: 1.25rem;
-  margin-bottom: 10px;
+  font-size: 16px;
+  margin-bottom: 5px;
 }
 
 .card-body p {
-  margin: 5px 0;
+  margin: 2px 0;
 }
 
 .card-footer {
-  margin-top: 10px;
-  text-align: right;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.status {
+  text-align: center;
+  color: #999;
+  font-size: 16px;
 }
 
 .card-footer button {
-  background-color: #056927;
+  background-color: #0f6c2ed3;
   color: white;
   border: none;
+  width: 80px;
   padding: 5px 10px;
   cursor: pointer;
 }
@@ -211,11 +88,14 @@ h2 {
 }
 
 .modal-content {
-  background-color: white;
-  padding: 20px;
+  background-color: rgb(255, 255, 255);
+  font-size: 12px;
+  padding: 10px;
   border-radius: 8px;
-  max-width: 600px;
+  max-width: 500px;
   width: 100%;
+  max-height: 90vh;  /* Limit the height */
+  overflow-y: auto;  /* Allow vertical scrolling */
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
@@ -227,72 +107,6 @@ h2 {
   color: red;
 }
 
-/* Dashboard.css */
-.record-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.card {
-  width: 280px;
-  border: 1px solid #ddd;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.card:hover {
-  transform: translateY(-5px);
-}
-
-.card-header h3 {
-  font-size: 16px;
-  margin-bottom: 10px;
-}
-
-.card-body p {
-  margin: 5px 0;
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 15px;
-}
-
-.status {
-  text-align: center;
-  color: #999;
-  font-size: 16px;
-}
-
-.qr-modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.qr-modal-dialog {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.qr-modal-dialog img {
-  width: 200px;
-  height: 200px;
-}
 /* Modal backdrop (darkened background) */
 .modal-backdrop {
   position: fixed;
@@ -310,23 +124,21 @@ h2 {
 
 /* Modal dialog */
 .modal-dialog {
-  background-color: #fff; /* White background for the modal */
+  background-color: #fff;
   padding: 20px;
-  border-radius: 8px; /* Rounded corners */
-  width: 80%; /* Width of the modal */
-  max-width: 600px; /* Limit the max width */
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Shadow for depth */
-  z-index: 1000; /* Ensure it's above the backdrop */
+  border-radius: 8px;
+  width: 80%;
+  max-width: 600px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
 }
 
-/* Title */
 .modal-dialog h2 {
   font-size: 24px;
   margin-bottom: 20px;
   text-align: center;
 }
 
-/* Form inside the modal */
 .modal-dialog .form-group {
   margin-bottom: 15px;
 }
@@ -345,7 +157,6 @@ h2 {
   border-radius: 4px;
 }
 
-/* Button styles */
 .modal-dialog button {
   padding: 10px 20px;
   font-size: 16px;
@@ -371,10 +182,122 @@ h2 {
 .modal-dialog .btn-secondary {
   margin-right: 10px;
 }
+
+/* Badge for status */
 .badge-warning {
   background-color: #ff0000; /* Yellow for updated records */
 }
 
 .badge-success {
   background-color: #28a745; /* Green for unchanged records */
+}
+
+/* QR Modal */
+.qr-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.qr-modal-dialog {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.qr-modal-dialog img {
+  width: 200px;
+  height: 200px;
+}
+
+/* Modal backdrop (darkened background) */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+  overflow: auto;
+}
+
+/* Modal dialog */
+.modal-dialog {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 600px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.modal-dialog h2 {
+  font-size: 24px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.modal-dialog .form-group {
+  margin-bottom: 15px;
+}
+
+.modal-dialog .form-group label {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.modal-dialog .form-group input,
+.modal-dialog .form-group textarea {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.modal-dialog button {
+  padding: 10px 20px;
+  font-size: 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.modal-dialog .btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.modal-dialog .btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.modal-dialog .btn:hover {
+  opacity: 0.8;
+}
+
+.modal-dialog .btn-secondary {
+  margin-right: 10px;
+}
+
+/* Badge for status */
+.badge-warning {
+  background-color: #ff0000;
+}
+
+.badge-success {
+  background-color: #28a745;
 }

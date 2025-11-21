@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
@@ -66,6 +65,8 @@ export default function UserDashboard({ user }) {
         control_number: r.control_number,
         description: r.description || "",
         destination_office: r.destination_office || "",
+       office_requestor: r.office_requestor || "",
+
         files: r.files || [],
       }));
 
@@ -83,41 +84,41 @@ export default function UserDashboard({ user }) {
   }, []);
 
   // -------------------- Forward Record --------------------
-const handleRelease = async (recordId, office) => {
-  if (!office) return alert("Please select a destination office.");
+  const handleRelease = async (recordId, office) => {
+    if (!office) return alert("Please select a destination office.");
 
-  const ok = window.confirm(`Forward record #${recordId} to ${office}?`);
-  if (!ok) return;
+    const ok = window.confirm(`Forward record #${recordId} to ${office}?`);
+    if (!ok) return;
 
-  try {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("You must be logged in to perform this action.");
-      return;
-    }
-
-    // Log the request to debug
-    console.log("Sending forward request for record:", recordId, "to office:", office);
-
-    const response = await axios.put(
-      `${API_BASE}/records/forward/${recordId}`,
-      { destination_office: office },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("You must be logged in to perform this action.");
+        return;
       }
-    );
 
-    alert(`Record forwarded to ${office}`);
-    setRecords((prev) => prev.filter((r) => r.id !== recordId));
-    setNextOffice((prev) => ({ ...prev, [recordId]: "" }));
-  } catch (error) {
-    console.error("Error forwarding record:", error.response || error);
-    alert("Failed to forward record.");
-  }
-};
+      const response = await axios.put(
+        `${API_BASE}/records/forward/${recordId}`,
+        { destination_office: office },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      alert(`Record forwarded to ${office}`);
+      setRecords((prev) => prev.filter((r) => r.id !== recordId));
+      setNextOffice((prev) => ({ ...prev, [recordId]: "" }));
+    } catch (error) {
+      console.error("Error forwarding record:", error.response || error);
+      alert("Failed to forward record.");
+    }
+  };
+
+  // Get user name from prop or localStorage
+  const name = user?.name || localStorage.getItem("userName") || "Guest"; // Get the user's name, fallback to "Guest"
 
   // -------------------- Render --------------------
   return (
@@ -125,19 +126,21 @@ const handleRelease = async (recordId, office) => {
       <Sidebar />
       <div className="main-content">
         <Navbar />
-        <div className="content-area py-8 px-4">
-          <h2 className="page-title text-xl font-bold">
-            Welcome, {user?.name || "User"}
-          </h2>
+        <div className="content-area py-8 px-4 flex justify-center items-center">
+          {/* <h2 className="page-title text-xl font-bold">
+            Welcome, {name}
+          </h2> */}
 
           {/* Dashboard Summary */}
-          <div className="dashboard-widgets grid grid-cols-3 gap-4 my-4">
-            <div className="widget p-4 bg-white shadow-lg rounded-lg">
-              <div className="widget-title text-lg font-semibold">
-                Total Records
-              </div>
-              <div className="widget-value text-3xl font-bold">
-                {records.length}
+          <div className="dashboard-widgets-wrapper flex justify-center items-center my-4">
+            <div className="dashboard-widgets grid grid-cols-3 gap-4">
+              <div className="widget p-4 bg-white shadow-lg rounded-lg">
+                <div className="widget-title text-lg font-semibold">
+                  Total Records
+                </div>
+                <div className="widget-value text-3xl font-bold">
+                  {records.length}
+                </div>
               </div>
             </div>
           </div>
@@ -162,6 +165,10 @@ const handleRelease = async (recordId, office) => {
                     <p>
                       <strong>Destination Office:</strong>{" "}
                       {r.destination_office || "—"}
+                    </p>
+                    <p>
+                      <strong>Office Requestor:</strong>{" "}
+                      {r.office_requestor || "—"}
                     </p>
 
                     <div>
@@ -197,6 +204,7 @@ const handleRelease = async (recordId, office) => {
                       }
                       className="form-control"
                     >
+                     
                       <option value="">Select next office</option>
                       {offices.map((office) => (
                         <option key={office} value={office}>
@@ -204,7 +212,6 @@ const handleRelease = async (recordId, office) => {
                         </option>
                       ))}
                     </select>
-
                     <button
                       className="btn-release"
                       disabled={!nextOffice[r.id]}

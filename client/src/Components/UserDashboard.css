@@ -29,20 +29,37 @@
   margin-top: 16px;
 }
 
+.forward{
+  display: flex;
+ color: green;
+  align-items: center;
+  margin-top: 16px;
+}
 button {
   padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.3s ease;
+  
 }
 
 /* Approve Button */
 .btn-approve {
-  background-color: #38a169;  /* Green */
+  background-color: #07532a;  /* Green */
   color: white;
   border: none;
 }
-
+.btn-release{
+  padding: 8px 16px;
+  margin-top: 10px;
+  margin-left: 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  width: 200px;
+  color: white;
+  background-color: rgb(10, 85, 10);
+}
 .btn-approve:hover {
   background-color: #2f855a;  /* Darker green on hover */
   transform: scale(1.05);

@@ -19,6 +19,10 @@
   gap: 12px;
   align-items: center;
   box-shadow: 0 1px 2px rgba(16,24,40,.03);
+  transition: all 0.3s ease-in-out;
+}
+.stat-card:hover {
+  transform: scale(1.05);
 }
 .stat-icon {
   width: 44px;
@@ -116,3 +120,68 @@
 
 /* Misc */
 .fw-600 { font-weight: 600; }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .row.g-3.g-lg-4 {
+    flex-direction: column;
+  }
+
+  .stat-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 12px;
+  }
+
+  .stat-icon {
+    margin-bottom: 8px;
+  }
+
+  .stat-body .stat-value {
+    font-size: 20px;
+  }
+
+  .segmented {
+    justify-content: center;
+  }
+
+  .seg-btn {
+    padding: 4px 8px;
+  }
+
+  .panel-header {
+    font-size: 14px;
+    padding-bottom: 6px;
+  }
+
+  .panel-body {
+    padding-top: 12px;
+  }
+
+  .panel {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 576px) {
+  .stat-body .stat-value {
+    font-size: 18px;
+  }
+
+  .stat-body .stat-label,
+  .stat-body .stat-trend {
+    font-size: 10px;
+  }
+
+  .panel-header h5 {
+    font-size: 14px;
+  }
+
+  .panel-body {
+    padding-top: 10px;
+  }
+
+  .panel {
+    padding: 10px;
+  }
+}

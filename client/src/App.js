@@ -26,12 +26,14 @@ import UserDashboard from "./Components/UserDashboard";
 // Utils
 import ProtectedRoute from "./Components/ProtectedRoute";
 import NewRecord from "./Components/NewRecord";
+import TrackRecord from "./Components/TrackRecord";
  // <- ensure actual filename/casing matches
 
 // Optional shared layout:
 // import AppLayout from "./AppLayout";
 
 export default function App() {
+  
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -130,6 +132,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin", "user"]}>
                 <AttachmentViewer />
+              </ProtectedRoute>
+            }
+          />
+          
+             <Route
+            path="/trackrecord"
+            element={
+              <ProtectedRoute allowedRoles={["admin", "user"]}>
+                <TrackRecord />
               </ProtectedRoute>
             }
           />

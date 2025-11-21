@@ -1,10 +1,11 @@
-// client/src/Components/Navbar.js
+
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { FaBars } from "react-icons/fa"; // Import the burger icon
 import "./Navbar.css";
 import { useAuth } from "../AuthContext";
 
-export default function Navbar() {
+export default function Navbar({ toggleSidebar }) {  // Accept the toggleSidebar function as a prop
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -21,16 +22,15 @@ export default function Navbar() {
   };
 
   const title = pageTitles[location.pathname] || "Records System";
+  // const userEmail = user?.email || localStorage.getItem("userEmail") || "Guest";
 
-  // Prefer context; fall back to localStorage; then to "Guest"/"User"
-  const userEmail = user?.email || localStorage.getItem("userEmail") || "Guest";
-  const userRole  = user?.role  || localStorage.getItem("userRole")  || "User";
+  const userName = user?.name || localStorage.getItem("userName") || "Guest";
+  const userRole = user?.role || localStorage.getItem("userRole") || "User";
 
   const openConfirm = () => setShowConfirm(true);
   const closeConfirm = () => setShowConfirm(false);
 
   const confirmLogout = () => {
-    // Use AuthContext logout if available (it clears storage & redirects)
     if (typeof logout === "function") {
       logout();
     } else {
@@ -38,16 +38,24 @@ export default function Navbar() {
       sessionStorage.clear();
       navigate("/", { replace: true });
     }
-    // No need to keep the modal open after navigating away
     setShowConfirm(false);
   };
 
   return (
     <>
-      <header className="navbar">
-        <h1>{title}</h1>
+      <header className="navbar"
+      // style={{ backgroundColor: '#06401497' }}
+      >
+        <div className="navbar-header">
+           {/* Burger button, which will call toggleSidebar */}
+          <button className="burger-btn" onClick={toggleSidebar}>
+            <FaBars />
+          </button>
+          <h1>{title}</h1>
+         
+        </div>
         <div className="navbar-user">
-          <span>👤 {userEmail} ({userRole})</span>
+          <span>👤 {userName} </span>
           <button className="btn-logout" onClick={openConfirm}>Logout</button>
         </div>
       </header>
@@ -56,9 +64,7 @@ export default function Navbar() {
         <div className="confirm-overlay" onClick={closeConfirm}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-title">Log out?</div>
-            <div className="confirm-body">
-              You’re about to log out of your session.
-            </div>
+            <div className="confirm-body">You’re about to log out of your session.</div>
             <div className="confirm-actions">
               <button className="btn btn-outline-secondary" onClick={closeConfirm}>
                 Cancel
