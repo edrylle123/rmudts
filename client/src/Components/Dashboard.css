@@ -1,47 +1,184 @@
+/* ---------------------------------------
+   Global Reset
+---------------------------------------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+:root {
+  /* Set the base size for the cards here */
+  --card-min-width: 230px;
 
-.d-flex {
-  display: flex;
-  justify-content: flex-start; /* Align content to the left */
-  align-items: flex-start; /* Align items at the top of the container */
+  --card-gap: 15px;
 }
 
+.dashboard-grid {
+  display: grid;
+  /* 💡 FIX 2A: Create two equal columns (1fr 1fr) */
+  grid-template-columns: 1fr 1fr;
+  gap: 30px; /* Space between the filter block and the chart block */
+  margin-bottom: 20px; /* Space below the grid */
+}
 
-/* General Styles */
+.chart-container {
+  /* Ensure the container height aligns well with the filters */
+  height: 100%; 
+  /* Add padding if needed to align content with the filters */
+}
+/* ---------------------------------------
+   Flex Helpers
+---------------------------------------- */
+
+.content-wrapper {
+  flex-grow: 1; /* Allows it to occupy remaining space beside the Sidebar */
+  min-height: 100vh; /* Ensures content wrapper fills the screen vertically */
+}
+.showing {
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #000000;
+}
+
+/* ---------------------------------------
+   Filters
+---------------------------------------- */
+.filter-container {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.filter-container .form-label {
+  margin-right: 10px;
+
+}
+.filter-container .filter-icon {
+  font-size: 18px; /* 💡 FIX 2: Make the icon bigger (adjust as needed) */
+  /* This value should be experimented with to match your desired field size */
+}
+.filter-container .filter-icon-label {
+  display: flex; /* Make it a flex container to align the icon */
+  align-items: center; /* Vertically center the icon */
+  height: calc(14px + 10px + 2px); /* Match approximate height of input (font-size + padding + border) */
+  margin-right: 5px; /* Adjust spacing between icon and select/input */
+  color: #000000; /* A slightly softer color for icons */
+  justify-content: center;
+  width: 25px;
+}
+.filter-container .form-select,
+.filter-container .form-control,
+.filter-container input[type="date"] {
+  width: 100px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* ---------------------------------------
+   Buttons
+---------------------------------------- */
 .delete {
   color: white;
   background-color: rgba(140, 9, 9, 0.87);
 }
 
-.record-cards {
+.card-footer button {
+  border: none;
+  width: 80px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 16px;
+  border-radius: 4px;
+
+}
+.badge-warning {
+  background-color: #ffc107; /* Brighter warning color */
+  color: #343a40; /* Dark text for contrast */
+  font-weight: bold;
+}
+.badge-success {
+  background-color: #28a745;
+  color: white; /* Light text for contrast */
+  font-weight: bold;
+}
+.card-footer button:hover {
+  background-color: #000000;
+}
+
+.pagination {
   display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+  justify-content: center;
+  gap: 10px;
   margin-top: 20px;
 }
 
+.pagination button {
+  padding: 8px 16px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination button.active {
+  background-color: #0056b3;
+}
+
+/* ---------------------------------------
+   Status Badges
+---------------------------------------- */
+.badge-warning {
+  background-color: #ff0000;
+}
+
+.badge-success {
+  background-color: #28a745;
+}
+
+/* ---------------------------------------
+   Card Layout
+---------------------------------------- */
+.record-cards,
 .cards-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+  display: grid;
+  /* Now uses the variable for easy adjustment */
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
+  gap: var(--card-gap);
+  margin-top: 20px;
+
+  margin-bottom: 200px;
 }
 
 .card {
-  width: 250px;
+  width: auto;
+  /* Uses the variable for the minimum required width */
+  min-width: var(--card-min-width);
+  /* 💡 Dynamic Height: Height is already dynamic (auto) by default. */
+  height: auto;
+
   border: 1px solid #ddd;
-  padding: 15px;
+  padding: 5px;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: transform 0.2s ease;
+  font-size: small;
 }
 
 .card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-8px);
 }
 
-.card-header h3 {
-  font-size: 16px;
-  margin-bottom: 5px;
+.card-header p {
+  font-weight: bold;
+  margin-bottom: 0;
 }
 
 .card-body p {
@@ -50,8 +187,10 @@
 
 .card-footer {
   display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
+  justify-content: center;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
 }
 
 .status {
@@ -60,26 +199,14 @@
   font-size: 16px;
 }
 
-.card-footer button {
-  background-color: #0f6c2ed3;
-  color: white;
-  border: none;
-  width: 80px;
-  padding: 5px 10px;
-  cursor: pointer;
-}
-
-.card-footer button:hover {
-  background-color: #0056b3;
-}
-
-/* Modal Overlay */
-.modal-overlay {
+/* ---------------------------------------
+   Universal Modal Styles
+---------------------------------------- */
+.modal-backdrop,
+.modal-overlay,
+.qr-modal-backdrop {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
@@ -87,18 +214,25 @@
   z-index: 9999;
 }
 
-.modal-content {
-  background-color: rgb(255, 255, 255);
-  font-size: 12px;
-  padding: 10px;
+/* Shared modal container */
+.modal-dialog,
+.modal-content,
+.qr-modal-dialog {
+  background: white;
+  padding: 20px;
   border-radius: 8px;
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;  /* Limit the height */
-  overflow-y: auto;  /* Allow vertical scrolling */
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 80%;
+  max-width: 600px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
+.modal-content {
+  font-size: 12px;
+}
+
+/* Close Button */
 .close-btn {
   background: none;
   border: none;
@@ -107,32 +241,7 @@
   color: red;
 }
 
-/* Modal backdrop (darkened background) */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent background */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 999; /* Ensure it sits above other content */
-  overflow: auto;
-}
-
-/* Modal dialog */
-.modal-dialog {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  width: 80%;
-  max-width: 600px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-}
-
+/* Modal Text/Inputs */
 .modal-dialog h2 {
   font-size: 24px;
   margin-bottom: 20px;
@@ -148,8 +257,8 @@
   font-weight: bold;
 }
 
-.modal-dialog .form-group input,
-.modal-dialog .form-group textarea {
+.modal-dialog input,
+.modal-dialog textarea {
   width: 100%;
   padding: 10px;
   font-size: 14px;
@@ -165,139 +274,66 @@
   cursor: pointer;
 }
 
-.modal-dialog .btn-primary {
+.btn-primary {
   background-color: #007bff;
   color: white;
 }
 
-.modal-dialog .btn-secondary {
+.btn-secondary {
   background-color: #6c757d;
   color: white;
 }
 
-.modal-dialog .btn:hover {
-  opacity: 0.8;
-}
-
-.modal-dialog .btn-secondary {
+.btn-secondary {
   margin-right: 10px;
 }
 
-/* Badge for status */
-.badge-warning {
-  background-color: #ff0000; /* Yellow for updated records */
-}
-
-.badge-success {
-  background-color: #28a745; /* Green for unchanged records */
-}
-
 /* QR Modal */
-.qr-modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.qr-modal-dialog {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  text-align: center;
-}
-
 .qr-modal-dialog img {
   width: 200px;
   height: 200px;
 }
 
-/* Modal backdrop (darkened background) */
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 999;
-  overflow: auto;
+/* ---------------------------------------
+   Responsive Breakpoints
+---------------------------------------- */
+@media (max-width: 768px) {
+  .card {
+    width: calc(50% - 10px);
+  }
+
+  .filter-container {
+    gap: 10px;
+  }
+
+  :root {
+    /* Adjust for smaller screens */
+    --card-min-width: 180px;
+  }
 }
 
-/* Modal dialog */
-.modal-dialog {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  width: 80%;
-  max-width: 600px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+@media (max-width: 480px) {
+  .card {
+    width: 100%;
+  }
+  /* On mobile phones, cards take the full width */
+  .record-cards {
+    grid-template-columns: 1fr;
+  }
+  .filter-container .form-select,
+  .filter-container .form-control,
+  .filter-container input[type="date"] {
+    min-width: 150px;
+    max-width: 250px; /* Allow for smaller width when needed */
+    width: auto;
+    padding: 5px 10px;
+    font-size: 14px;
+  }
 }
 
-.modal-dialog h2 {
-  font-size: 24px;
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.modal-dialog .form-group {
-  margin-bottom: 15px;
-}
-
-.modal-dialog .form-group label {
-  font-size: 16px;
-  font-weight: bold;
-}
-
-.modal-dialog .form-group input,
-.modal-dialog .form-group textarea {
-  width: 100%;
-  padding: 10px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.modal-dialog button {
-  padding: 10px 20px;
-  font-size: 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.modal-dialog .btn-primary {
-  background-color: #007bff;
-  color: white;
-}
-
-.modal-dialog .btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.modal-dialog .btn:hover {
-  opacity: 0.8;
-}
-
-.modal-dialog .btn-secondary {
-  margin-right: 10px;
-}
-
-/* Badge for status */
-.badge-warning {
-  background-color: #ff0000;
-}
-
-.badge-success {
-  background-color: #28a745;
+@media (max-width: 992px) {
+  /* 💡 FIX 3: Collapse the dashboard grid into one column on smaller screens */
+  .dashboard-grid {
+    grid-template-columns: 1fr; /* Single column */
+  }
 }

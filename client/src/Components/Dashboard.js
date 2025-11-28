@@ -6,6 +6,9 @@ import axios from "./axios";
 import { socket } from "../socket";
 import "./PriorityBadges.css";
 import "./Dashboard.css"; // Assuming you have some CSS for styling
+import { FaQrcode, FaPencilAlt, FaTrashAlt,FaFileAlt } from "react-icons/fa";
+import { RiHomeOfficeFill } from "react-icons/ri";
+import { BsCalendarDateFill } from "react-icons/bs";
 import {
   BarChart,
   Bar,
@@ -856,22 +859,27 @@ export default function Dashboard() {
   const closePopup = () => {
     setShowQR(false);
   };
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9999; // Set the number of items per page
+
+  const paginatedRecords = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filtered.slice(startIndex, endIndex);
+  }, [filtered, currentPage]);
 
   return (
-    <div className="d-flex">
+    <div className="d-flex main-layout">
       <Sidebar />
-      <div className="flex-grow-1">
+      <div className="content-wrapper">
         <Navbar />
-        <div className="container p-3">
-          <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-            <div className="text-muted small">
-              Showing <strong>{filtered.length}</strong> of {records.length}
-            </div>
-          </div>
-          <div className="d-flex justify-content-between align-items-center">
-            <div className="d-flex align-items-center">
-              <label htmlFor="recordFilter" className="form-label mr-2">
-                Filter by Record Type
+        <div className="container-fluid">
+          <div className="dashboard-grid">
+{/* FILTER */}
+          <div className="filter-container">
+            <div className="d-flex align-items-center filter-item">
+              <label htmlFor="recordFilter" className="form-label filter-icon-label">
+                <FaFileAlt className="filter-icon" />
               </label>
               <select
                 id="recordFilter"
@@ -886,8 +894,8 @@ export default function Dashboard() {
             </div>
 
             <div className="d-flex align-items-center">
-              <label htmlFor="officeFilter" className="form-label mr-2">
-                Filter by Office
+              <label htmlFor="officeFilter" className="form-label filter-icon-label">
+               <RiHomeOfficeFill className="filter-icon" />
               </label>
               <select
                 id="officeFilter"
@@ -905,8 +913,8 @@ export default function Dashboard() {
             </div>
 
             <div className="d-flex align-items-center">
-              <label htmlFor="dateFilter" className="form-label mr-2">
-                Filter by Date
+              <label htmlFor="dateFilter" className="form-label filter-icon-label">
+                <BsCalendarDateFill className="filter-icon" />
               </label>
               <input
                 type="date"
@@ -918,35 +926,38 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-            <div className="text-muted small">
-              Showing <strong>{filtered.length}</strong> of {rowsRaw.length}
-            </div>
-          </div>
 
           {/* Records Overview Chart */}
-          <div className="office-records-container mt-4">
+          <div className="chart-container">
             <h5 className="mb-4">Office Records Overview</h5>
 
             {/* Bar Chart for Records Per Office */}
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="office" />
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="records" fill="#8884d8" />
+                <Bar dataKey="records" fill="#35804eff" />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          </div>
+          
+          <div className="showing">
+            <div className="text-muted small">
+              Showing <strong>{filtered.length}</strong> of {rowsRaw.length}
+            </div>
+          </div>
+          
 
           <div className="record-cards">
-            {filtered.length > 0 ? (
-              filtered.map((record) => (
+            {paginatedRecords.length > 0 ? (
+              paginatedRecords.map((record) => (
                 <div key={record.id} className="card record-card">
                   <div className="card-header">
-                    <h3>{record.control_number || "No Control Number"}</h3>
+                    <p>{record.control_number || "No Control Number"}</p>
                     <p>{record.record_origin || "Untitled"}</p>
                     {/* Display status */}
                     <span
@@ -976,19 +987,19 @@ export default function Dashboard() {
                       className="btn btn-outline-primary"
                       onClick={() => handleViewQR(record)}
                     >
-                      QR
+                      <FaQrcode />
                     </button>
                     <button
-                      className="btn btn-outline-danger"
+                      className="btn btn-outline-success"
                       onClick={() => handleEdit(record)}
                     >
-                      Update
+                      <FaPencilAlt />
                     </button>
                     <button
                       className="btn btn-outline-danger"
                       onClick={() => handleDelete(record)}
                     >
-                      Delete
+                     <FaTrashAlt />
                     </button>
                   </div>
                 </div>
@@ -996,6 +1007,42 @@ export default function Dashboard() {
             ) : (
               <div className="status">No records available.</div>
             )}
+          </div>
+          
+          <div className="pagination">
+            <button
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              {"<<"} Previous
+            </button>
+
+            {/* Display Page Numbers */}
+            {Array.from(
+              { length: Math.ceil(filtered.length / itemsPerPage) },
+              (_, index) => (
+                <button
+                  key={index + 1}
+                  onClick={() => setCurrentPage(index + 1)}
+                  className={currentPage === index + 1 ? "active" : ""}
+                >
+                  {index + 1}
+                </button>
+              )
+            )}
+
+            <button
+              onClick={() =>
+                setCurrentPage((prev) =>
+                  Math.min(prev + 1, Math.ceil(filtered.length / itemsPerPage))
+                )
+              }
+              disabled={
+                currentPage === Math.ceil(filtered.length / itemsPerPage)
+              }
+            >
+              Next {">>"}
+            </button>
           </div>
 
           {showQR && (

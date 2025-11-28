@@ -29,6 +29,7 @@ export default function Sidebar() {
     return (
       <div className={`sidebar ${isOpen ? "expanded" : "collapsed"}`}>
         <div className="sidebar-header">
+         <img src="/rtms.png" alt="Logo" className="sidebar-logo mb-2" />
           <h4 className="mb-4">Records System</h4>
           <button className="burger-btn" onClick={toggleSidebar}>
             <FaBars />
@@ -48,10 +49,15 @@ export default function Sidebar() {
   return (
     <div className={`sidebar ${isOpen ? "expanded" : "collapsed"}`}>
       <div className="sidebar-header">
-        <h4 className="mb-4">Records System</h4>
-        <button className="burger-btn" onClick={toggleSidebar}>
+         <img src="/rtms.png" alt="Logo" className="sidebar-logo mb-2" />
+
+        {/* <h4 className="mb-4">Records System</h4> */}
+      
+        <div>
+  <button className="burger-btn" onClick={toggleSidebar}>
           <FaBars />
         </button>
+        </div>
       </div>
       <ul className="list-unstyled flex-grow-1">
         <Item to="/dashboard" icon={<MdDashboard />}>Dashboard</Item>
