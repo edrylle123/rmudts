@@ -18,7 +18,7 @@
   /* 💡 FIX 2A: Create two equal columns (1fr 1fr) */
   grid-template-columns: 1fr 1fr;
   gap: 30px; /* Space between the filter block and the chart block */
-  margin-bottom: 20px; /* Space below the grid */
+  margin-bottom: 10px; /* Space below the grid */
 }
 
 .chart-container {
@@ -151,9 +151,9 @@
   /* Now uses the variable for easy adjustment */
   grid-template-columns: repeat(auto-fill, minmax(var(--card-min-width), 1fr));
   gap: var(--card-gap);
-  margin-top: 20px;
+  margin-top: 2px;
 
-  margin-bottom: 200px;
+  margin-bottom: 10px;
 }
 
 .card {

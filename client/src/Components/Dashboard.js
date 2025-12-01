@@ -562,6 +562,59 @@ export default function Dashboard() {
     socket.on("recordUpdated", onUpdated);
     load(); // Fetch records initially
 
+// Function to calculate how many cards fit
+    const calculateItemsPerPage = () => {
+      if (!cardContainerRef.current || !cardRef.current || filtered.length === 0) {
+        // If refs aren't ready or no records, return the current state
+        return;
+      }
+      
+      const containerHeight = window.innerHeight; // Total viewport height
+      const navbarHeight = 60; // Estimate or measure your Navbar height
+      const headerHeight = cardContainerRef.current.offsetTop; // Height from top of page to where cards start
+
+      // Calculate the available vertical space for the cards
+      const availableHeight = containerHeight - headerHeight - navbarHeight - 70; // 70px for padding/footer/pagination area
+      
+      // Measure the actual computed height of a single card
+      const cardStyle = window.getComputedStyle(cardRef.current);
+      const cardHeight = cardRef.current.offsetHeight + 
+                         parseFloat(cardStyle.marginTop) + 
+                         parseFloat(cardStyle.marginBottom);
+
+      // We need to know how many cards fit vertically and horizontally.
+      // Since your CSS Grid handles horizontal fit, we only need vertical fit.
+      
+      // Calculate how many rows fit vertically
+      const rowsFit = Math.floor(availableHeight / cardHeight);
+      
+      // Estimate the number of columns based on your fixed min-width (150px)
+      const contentWidth = cardContainerRef.current.offsetWidth;
+      const cardMinWidth = 150; // Use the value from your CSS: --card-min-width
+      const cardGap = 15; // Use the value from your CSS: --card-gap
+      
+      // Simple estimation of columns:
+      const colsFit = Math.floor(contentWidth / (cardMinWidth + cardGap));
+
+      // Items per page = rows * columns
+      const calculatedItems = rowsFit * colsFit;
+
+      // Update state only if the calculated number is different and reasonable
+      if (calculatedItems > 0 && calculatedItems !== itemsPerPage) {
+        setItemsPerPage(calculatedItems);
+        // Reset to page 1 if the number of items per page changes drastically
+        setCurrentPage(1);
+      }
+    };
+
+    // Run once initially
+    calculateItemsPerPage();
+
+    // Run on window resize for responsiveness
+    window.addEventListener('resize', calculateItemsPerPage);
+
+
+
     return () => socket.off("recordUpdated", onUpdated);
   }, []);
 
@@ -672,47 +725,7 @@ export default function Dashboard() {
     }
   };
 
-  // Transform rows into records with files grouped
-  // const records = useMemo(() => {
-  //   const map = new Map();
-  //   for (const r of rowsRaw) {
-  //     const recId =
-  //       r.id ?? r.control_number ?? Math.random().toString(36).slice(2);
-  //     if (!map.has(recId)) {
-  //       map.set(recId, {
-  //         id: recId,
-  //         control_number: r.control_number || "",
-  //         // title: r.title || "",
-  //         classification: r.classification || "",
-  //         priority: r.priority || "Normal",
-  //         office_requestor: r.office_requestor || "",
-  //         destination_office: r.destination_office || "",
-  //         record_origin: r.record_origin || "Unknown",
-  //         created_at: r.created_at || null,
-  //         updated_at: r.updated_at || r.created_at, // Include updated_at
-  //         description: r.description || "",
-  //         retention_period: r.retention_period || "",
-  //         remarks: r.remarks || "",
-  //         // concerned_personnel: r.concerned_personnel || "",
-  //         files: [],
-  //         qrcode_path: r.qrcode_path || "",
-  //         current_office: r.current_office || "Unknown Office",
-  //       });
-  //     }
-  //     if (r.file_path) {
-  //       map.get(recId).files.push({
-  //         name: r.file_name || r.file_path.split("/").pop(),
-  //         path: r.file_path,
-  //       });
-  //     }
-  //   }
-  //   return Array.from(map.values()).sort(
-  //     (a, b) =>
-  //       (new Date(b.created_at).getTime() || 0) -
-  //       (new Date(a.created_at).getTime() || 0)
-  //   );
-  // }, [rowsRaw]);
-  const records = useMemo(() => {
+ const records = useMemo(() => {
     const map = new Map();
     for (const r of rowsRaw) {
       const recId =
@@ -860,7 +873,13 @@ export default function Dashboard() {
     setShowQR(false);
   };
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9999; // Set the number of items per page
+  // const itemsPerPage = 9999; // Set the number of items per page
+
+  const cardContainerRef = useRef(null);
+  const cardRef = useRef(null);
+
+  // 💡 FIX 1: Initialized itemsPerPage to a safe default (or 1)
+  const [itemsPerPage, setItemsPerPage] = useState(12); // Start with a safe number
 
   const paginatedRecords = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -924,6 +943,11 @@ export default function Dashboard() {
                 onChange={(e) => setFromDate(e.target.value)}
               />
             </div>
+            <div className="showing">
+            <div className="text-muted small">
+              Showing <strong>{filtered.length}</strong> of {rowsRaw.length}
+            </div>
+          </div>
           </div>
 
 
@@ -945,11 +969,7 @@ export default function Dashboard() {
           </div>
           </div>
           
-          <div className="showing">
-            <div className="text-muted small">
-              Showing <strong>{filtered.length}</strong> of {rowsRaw.length}
-            </div>
-          </div>
+          
           
 
           <div className="record-cards">
